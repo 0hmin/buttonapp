@@ -3,7 +3,7 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
@@ -45,51 +45,72 @@ const upload = multer({
   }
 });
 
-// SQLite 데이터베이스 초기화
-const db = new sqlite3.Database('database.db');
-
-// 데이터베이스 테이블 생성
-db.serialize(() => {
-  // 사용자 테이블
-  db.run(`CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nickname TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-
-  // 이미지 테이블
-  db.run(`CREATE TABLE IF NOT EXISTS images (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    filename TEXT NOT NULL,
-    original_filename TEXT,
-    src TEXT NOT NULL,
-    width INTEGER,
-    height INTEGER,
-    scale REAL,
-    uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    display_start_at DATETIME,
-    display_end_at DATETIME,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-  )`);
-
-  // 단추(버튼) 테이블
-  db.run(`CREATE TABLE IF NOT EXISTS user_buttons (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    image_id INTEGER NOT NULL,
-    button_src TEXT NOT NULL,
-    button_width REAL NOT NULL,
-    button_height REAL NOT NULL,
-    button_left REAL NOT NULL,
-    button_top REAL NOT NULL,
-    button_transform TEXT,
-    added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (image_id) REFERENCES images(id)
-  )`);
+// PostgreSQL 데이터베이스 초기화
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || 'postgresql://button_app_user:5hzsepBECBjyo1KQ32wV2cGe9PbYlCu7@dpg-d5fid32li9vc738pa520-a.oregon-postgres.render.com/button_app',
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
+
+// 데이터베이스 연결 테스트
+pool.on('connect', () => {
+  console.log('PostgreSQL 데이터베이스에 연결되었습니다.');
+});
+
+pool.on('error', (err) => {
+  console.error('PostgreSQL 연결 오류:', err);
+});
+
+// 데이터베이스 테이블 생성 (비동기)
+(async () => {
+  const client = await pool.connect();
+  try {
+    // 사용자 테이블
+    await client.query(`CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      nickname VARCHAR(255) UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    // 이미지 테이블
+    await client.query(`CREATE TABLE IF NOT EXISTS images (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      filename TEXT NOT NULL,
+      original_filename TEXT,
+      src TEXT NOT NULL,
+      width INTEGER,
+      height INTEGER,
+      scale DOUBLE PRECISION,
+      uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      display_start_at TIMESTAMP,
+      display_end_at TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    )`);
+
+    // 단추(버튼) 테이블
+    await client.query(`CREATE TABLE IF NOT EXISTS user_buttons (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      image_id INTEGER NOT NULL,
+      button_src TEXT NOT NULL,
+      button_width DOUBLE PRECISION NOT NULL,
+      button_height DOUBLE PRECISION NOT NULL,
+      button_left DOUBLE PRECISION NOT NULL,
+      button_top DOUBLE PRECISION NOT NULL,
+      button_transform TEXT,
+      added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (image_id) REFERENCES images(id)
+    )`);
+
+    console.log('데이터베이스 테이블 생성 완료');
+  } catch (err) {
+    console.error('테이블 생성 오류:', err);
+  } finally {
+    client.release();
+  }
+})();
 
 // JWT 시크릿 키
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
@@ -132,26 +153,23 @@ app.post('/api/signup', async (req, res) => {
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    db.run(
-      'INSERT INTO users (nickname, password) VALUES (?, ?)',
-      [nickname, hashedPassword],
-      function(err) {
-        if (err) {
-          if (err.message.includes('UNIQUE')) {
-            return res.status(409).json({ error: '이미 존재하는 닉네임입니다.' });
-          }
-          return res.status(500).json({ error: '회원가입 실패' });
-        }
-        
-        const token = generateToken(this.lastID);
-        res.json({ 
-          success: true, 
-          token, 
-          user: { id: this.lastID, nickname } 
-        });
-      }
+    const result = await pool.query(
+      'INSERT INTO users (nickname, password) VALUES ($1, $2) RETURNING id',
+      [nickname, hashedPassword]
     );
+
+    const userId = result.rows[0].id;
+    const token = generateToken(userId);
+    res.json({ 
+      success: true, 
+      token, 
+      user: { id: userId, nickname } 
+    });
   } catch (error) {
+    if (error.code === '23505') { // UNIQUE constraint violation
+      return res.status(409).json({ error: '이미 존재하는 닉네임입니다.' });
+    }
+    console.error('회원가입 오류:', error);
     res.status(500).json({ error: '서버 오류' });
   }
 });
@@ -164,39 +182,37 @@ app.post('/api/login', async (req, res) => {
     return res.status(400).json({ error: '닉네임과 비밀번호를 입력해주세요.' });
   }
 
-  db.get(
-    'SELECT * FROM users WHERE nickname = ?',
-    [nickname],
-    async (err, user) => {
-      if (err) {
-        return res.status(500).json({ error: '서버 오류' });
-      }
+  try {
+    const result = await pool.query(
+      'SELECT * FROM users WHERE nickname = $1',
+      [nickname]
+    );
 
-      if (!user) {
-        return res.status(401).json({ error: '닉네임 또는 비밀번호가 잘못되었습니다.' });
-      }
+    const user = result.rows[0];
 
-      try {
-        const valid = await bcrypt.compare(password, user.password);
-        if (!valid) {
-          return res.status(401).json({ error: '닉네임 또는 비밀번호가 잘못되었습니다.' });
-        }
-
-        const token = generateToken(user.id);
-        res.json({ 
-          success: true, 
-          token, 
-          user: { id: user.id, nickname: user.nickname } 
-        });
-      } catch (error) {
-        res.status(500).json({ error: '서버 오류' });
-      }
+    if (!user) {
+      return res.status(401).json({ error: '닉네임 또는 비밀번호가 잘못되었습니다.' });
     }
-  );
+
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) {
+      return res.status(401).json({ error: '닉네임 또는 비밀번호가 잘못되었습니다.' });
+    }
+
+    const token = generateToken(user.id);
+    res.json({ 
+      success: true, 
+      token, 
+      user: { id: user.id, nickname: user.nickname } 
+    });
+  } catch (error) {
+    console.error('로그인 오류:', error);
+    res.status(500).json({ error: '서버 오류' });
+  }
 });
 
 // 이미지 업로드
-app.post('/api/images/upload', authenticateToken, upload.single('image'), (req, res) => {
+app.post('/api/images/upload', authenticateToken, upload.single('image'), async (req, res) => {
   console.log('=== 이미지 업로드 요청 ===');
   console.log('요청한 사용자 ID:', req.userId);
   console.log('파일 존재:', !!req.file);
@@ -229,85 +245,78 @@ app.post('/api/images/upload', authenticateToken, upload.single('image'), (req, 
     displayEndAt: displayEndAt
   });
 
-  db.run(
-    `INSERT INTO images (user_id, filename, original_filename, src, width, height, scale, uploaded_at, display_start_at, display_end_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [req.userId, filename, req.file.originalname, fileUrl, width, height, scale, uploadedAt, displayStartAt, displayEndAt],
-    function(err) {
-      if (err) {
-        console.error('이미지 저장 오류:', err);
-        return res.status(500).json({ error: '이미지 저장 실패' });
-      }
+  try {
+    const result = await pool.query(
+      `INSERT INTO images (user_id, filename, original_filename, src, width, height, scale, uploaded_at, display_start_at, display_end_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+      [req.userId, filename, req.file.originalname, fileUrl, width, height, scale, uploadedAt, displayStartAt, displayEndAt]
+    );
 
-      console.log('=== 이미지 저장 성공 ===');
-      console.log('저장된 이미지 ID:', this.lastID);
-      console.log('저장된 이미지 URL:', fileUrl);
+    const imageId = result.rows[0].id;
 
-      // 저장 후 실제로 DB에 있는지 확인
-      db.get('SELECT * FROM images WHERE id = ?', [this.lastID], (checkErr, savedImage) => {
-        if (checkErr) {
-          console.error('저장 확인 오류:', checkErr);
-        } else {
-          console.log('DB에서 확인한 이미지:', savedImage ? {
-            id: savedImage.id,
-            user_id: savedImage.user_id,
-            src: savedImage.src
-          } : '없음');
-        }
-      });
+    console.log('=== 이미지 저장 성공 ===');
+    console.log('저장된 이미지 ID:', imageId);
+    console.log('저장된 이미지 URL:', fileUrl);
 
-      res.json({
-        success: true,
-        image: {
-          id: this.lastID,
-          src: fileUrl,
-          width: parseInt(width),
-          height: parseInt(height),
-          scale: parseFloat(scale),
-          uploaded_at: uploadedAt,
-          display_start_at: displayStartAt,
-          display_end_at: displayEndAt
-        }
+    // 저장 후 실제로 DB에 있는지 확인
+    const checkResult = await pool.query('SELECT * FROM images WHERE id = $1', [imageId]);
+    if (checkResult.rows[0]) {
+      console.log('DB에서 확인한 이미지:', {
+        id: checkResult.rows[0].id,
+        user_id: checkResult.rows[0].user_id,
+        src: checkResult.rows[0].src
       });
     }
-  );
+
+    res.json({
+      success: true,
+      image: {
+        id: imageId,
+        src: fileUrl,
+        width: parseInt(width),
+        height: parseInt(height),
+        scale: parseFloat(scale),
+        uploaded_at: uploadedAt,
+        display_start_at: displayStartAt,
+        display_end_at: displayEndAt
+      }
+    });
+  } catch (error) {
+    console.error('이미지 저장 오류:', error);
+    res.status(500).json({ error: '이미지 저장 실패' });
+  }
 });
 
 // 이미지 목록 조회
-app.get('/api/images', authenticateToken, (req, res) => {
+app.get('/api/images', authenticateToken, async (req, res) => {
   console.log('=== 이미지 목록 조회 요청 ===');
   console.log('요청한 사용자 ID:', req.userId);
   
-  // 먼저 JOIN 없이 이미지만 조회해서 확인
-  db.all('SELECT COUNT(*) as count FROM images', [], (countErr, countResult) => {
-    if (!countErr && countResult && countResult.length > 0) {
-      console.log('images 테이블의 총 이미지 개수 (JOIN 없이):', countResult[0].count);
+  try {
+    // 먼저 JOIN 없이 이미지만 조회해서 확인
+    const countResult = await pool.query('SELECT COUNT(*) as count FROM images');
+    if (countResult.rows && countResult.rows.length > 0) {
+      console.log('images 테이블의 총 이미지 개수 (JOIN 없이):', countResult.rows[0].count);
       
       // 이미지가 있는데 JOIN으로 조회가 안 되는 경우를 대비해 실제 이미지 데이터도 확인
-      db.all('SELECT id, user_id, src, uploaded_at FROM images LIMIT 5', [], (sampleErr, sampleImages) => {
-        if (!sampleErr && sampleImages) {
-          console.log('샘플 이미지 데이터 (최대 5개):', sampleImages);
-        }
-      });
+      const sampleResult = await pool.query('SELECT id, user_id, src, uploaded_at FROM images LIMIT 5');
+      if (sampleResult.rows) {
+        console.log('샘플 이미지 데이터 (최대 5개):', sampleResult.rows);
+      }
     }
-  });
-  
-  // LEFT JOIN을 사용해서 users 테이블에 없는 경우에도 이미지는 조회되도록
-  const query = `
-    SELECT 
-      i.*,
-      u.nickname as user_nickname
-    FROM images i
-    LEFT JOIN users u ON i.user_id = u.id
-    ORDER BY i.uploaded_at DESC
-  `;
+    
+    // LEFT JOIN을 사용해서 users 테이블에 없는 경우에도 이미지는 조회되도록
+    const query = `
+      SELECT 
+        i.*,
+        u.nickname as user_nickname
+      FROM images i
+      LEFT JOIN users u ON i.user_id = u.id
+      ORDER BY i.uploaded_at DESC
+    `;
 
-  db.all(query, [], (err, images) => {
-    if (err) {
-      console.error('이미지 조회 오류:', err);
-      console.error('에러 상세:', err.message);
-      return res.status(500).json({ error: '이미지 조회 실패: ' + err.message });
-    }
+    const result = await pool.query(query);
+    const images = result.rows;
 
     console.log('=== 데이터베이스 조회 결과 ===');
     console.log('조회된 이미지 개수:', images ? images.length : 0);
@@ -322,266 +331,244 @@ app.get('/api/images', authenticateToken, (req, res) => {
     } else {
       console.log('조회된 이미지가 없습니다.');
       // JOIN 없이 이미지만 조회해보기
-      db.all('SELECT * FROM images ORDER BY uploaded_at DESC LIMIT 10', [], (noJoinErr, noJoinImages) => {
-        if (!noJoinErr) {
-          console.log('JOIN 없이 조회한 이미지 개수:', noJoinImages ? noJoinImages.length : 0);
-          if (noJoinImages && noJoinImages.length > 0) {
-            console.log('JOIN 없이 조회한 첫 번째 이미지:', {
-              id: noJoinImages[0].id,
-              user_id: noJoinImages[0].user_id,
-              src: noJoinImages[0].src
-            });
-          }
-        }
-      });
+      const noJoinResult = await pool.query('SELECT * FROM images ORDER BY uploaded_at DESC LIMIT 10');
+      console.log('JOIN 없이 조회한 이미지 개수:', noJoinResult.rows ? noJoinResult.rows.length : 0);
+      if (noJoinResult.rows && noJoinResult.rows.length > 0) {
+        console.log('JOIN 없이 조회한 첫 번째 이미지:', {
+          id: noJoinResult.rows[0].id,
+          user_id: noJoinResult.rows[0].user_id,
+          src: noJoinResult.rows[0].src
+        });
+      }
     }
 
     res.json({ images: images || [] });
-  });
+  } catch (error) {
+    console.error('이미지 조회 오류:', error);
+    console.error('에러 상세:', error.message);
+    res.status(500).json({ error: '이미지 조회 실패: ' + error.message });
+  }
 });
 
 // 이미지 삭제
-app.delete('/api/images/:imageId', authenticateToken, (req, res) => {
+app.delete('/api/images/:imageId', authenticateToken, async (req, res) => {
   const { imageId } = req.params;
 
-  // 먼저 이미지 정보 조회 (파일명과 사용자 확인용)
-  db.get(
-    'SELECT filename, user_id FROM images WHERE id = ?',
-    [imageId],
-    (err, image) => {
-      if (err) {
-        console.error('이미지 조회 오류:', err);
-        return res.status(500).json({ error: '이미지 조회 실패' });
-      }
+  try {
+    // 먼저 이미지 정보 조회 (파일명과 사용자 확인용)
+    const imageResult = await pool.query(
+      'SELECT filename, user_id FROM images WHERE id = $1',
+      [imageId]
+    );
 
-      if (!image) {
-        return res.status(404).json({ error: '이미지를 찾을 수 없습니다.' });
-      }
+    const image = imageResult.rows[0];
 
-      // 본인이 업로드한 이미지만 삭제 가능하도록 검증
-      if (image.user_id !== req.userId) {
-        return res.status(403).json({ error: '삭제 권한이 없습니다.' });
-      }
-
-      // 관련된 단추 먼저 삭제
-      db.run(
-        'DELETE FROM user_buttons WHERE image_id = ?',
-        [imageId],
-        (err) => {
-          if (err) {
-            console.error('단추 삭제 오류:', err);
-            // 단추 삭제 실패해도 계속 진행
-          }
-
-          // 이미지 레코드 삭제
-          db.run(
-            'DELETE FROM images WHERE id = ?',
-            [imageId],
-            function(err) {
-              if (err) {
-                console.error('이미지 삭제 오류:', err);
-                return res.status(500).json({ error: '이미지 삭제 실패' });
-              }
-
-              // 실제 파일도 삭제
-              const filePath = path.join(uploadsDir, image.filename);
-              fs.unlink(filePath, (unlinkErr) => {
-                if (unlinkErr && unlinkErr.code !== 'ENOENT') {
-                  // 파일이 없어도 성공으로 처리 (ENOENT)
-                  console.error('파일 삭제 오류:', unlinkErr);
-                }
-              });
-
-              res.json({
-                success: true,
-                message: '이미지가 삭제되었습니다.'
-              });
-            }
-          );
-        }
-      );
+    if (!image) {
+      return res.status(404).json({ error: '이미지를 찾을 수 없습니다.' });
     }
-  );
+
+    // 본인이 업로드한 이미지만 삭제 가능하도록 검증
+    if (image.user_id !== req.userId) {
+      return res.status(403).json({ error: '삭제 권한이 없습니다.' });
+    }
+
+    // 관련된 단추 먼저 삭제
+    try {
+      await pool.query('DELETE FROM user_buttons WHERE image_id = $1', [imageId]);
+    } catch (err) {
+      console.error('단추 삭제 오류:', err);
+      // 단추 삭제 실패해도 계속 진행
+    }
+
+    // 이미지 레코드 삭제
+    await pool.query('DELETE FROM images WHERE id = $1', [imageId]);
+
+    // 실제 파일도 삭제
+    const filePath = path.join(uploadsDir, image.filename);
+    fs.unlink(filePath, (unlinkErr) => {
+      if (unlinkErr && unlinkErr.code !== 'ENOENT') {
+        // 파일이 없어도 성공으로 처리 (ENOENT)
+        console.error('파일 삭제 오류:', unlinkErr);
+      }
+    });
+
+    res.json({
+      success: true,
+      message: '이미지가 삭제되었습니다.'
+    });
+  } catch (error) {
+    console.error('이미지 삭제 오류:', error);
+    res.status(500).json({ error: '이미지 삭제 실패' });
+  }
 });
 
 // 단추 추가
-app.post('/api/buttons', authenticateToken, (req, res) => {
+app.post('/api/buttons', authenticateToken, async (req, res) => {
   const { imageId, buttonData } = req.body;
 
   if (!imageId || !buttonData) {
     return res.status(400).json({ error: '이미지 ID와 단추 데이터가 필요합니다.' });
   }
 
-  // 이미 해당 사용자가 이 이미지에 단추를 추가했는지 확인
-  db.get(
-    'SELECT id FROM user_buttons WHERE user_id = ? AND image_id = ?',
-    [req.userId, imageId],
-    (err, existing) => {
-      if (err) {
-        console.error('단추 중복 확인 오류:', err);
-        return res.status(500).json({ error: '서버 오류' });
-      }
+  try {
+    // 이미 해당 사용자가 이 이미지에 단추를 추가했는지 확인
+    const existingResult = await pool.query(
+      'SELECT id FROM user_buttons WHERE user_id = $1 AND image_id = $2',
+      [req.userId, imageId]
+    );
 
-      if (existing) {
-        // 이미 단추가 있으면 기존 단추 업데이트
-        // 클라이언트에서 보낸 addedAt 사용 (타임스탬프인 경우 ISO 문자열로 변환)
-        let addedAtValue;
-        if (buttonData.addedAt) {
-          // 타임스탬프(숫자)인 경우 ISO 문자열로 변환
-          if (typeof buttonData.addedAt === 'number') {
-            addedAtValue = new Date(buttonData.addedAt).toISOString();
-          } else {
-            // 이미 문자열인 경우 그대로 사용
-            addedAtValue = buttonData.addedAt;
-          }
+    const existing = existingResult.rows[0];
+
+    if (existing) {
+      // 이미 단추가 있으면 기존 단추 업데이트
+      // 클라이언트에서 보낸 addedAt 사용 (타임스탬프인 경우 ISO 문자열로 변환)
+      let addedAtValue;
+      if (buttonData.addedAt) {
+        // 타임스탬프(숫자)인 경우 ISO 문자열로 변환
+        if (typeof buttonData.addedAt === 'number') {
+          addedAtValue = new Date(buttonData.addedAt).toISOString();
         } else {
-          // addedAt이 없으면 기존 시간 유지 (업데이트하지 않음)
-          addedAtValue = null;
+          // 이미 문자열인 경우 그대로 사용
+          addedAtValue = buttonData.addedAt;
         }
-        
-        const updateQuery = addedAtValue 
-          ? `UPDATE user_buttons 
-             SET button_src = ?, button_width = ?, button_height = ?, button_left = ?, button_top = ?, button_transform = ?, added_at = ?
-             WHERE user_id = ? AND image_id = ?`
-          : `UPDATE user_buttons 
-             SET button_src = ?, button_width = ?, button_height = ?, button_left = ?, button_top = ?, button_transform = ?
-             WHERE user_id = ? AND image_id = ?`;
-        
-        const updateParams = addedAtValue
-          ? [
-              buttonData.src,
-              buttonData.width,
-              buttonData.height,
-              buttonData.left,
-              buttonData.top,
-              buttonData.transform || 'rotate(0deg)',
-              addedAtValue,
-              req.userId,
-              imageId
-            ]
-          : [
-              buttonData.src,
-              buttonData.width,
-              buttonData.height,
-              buttonData.left,
-              buttonData.top,
-              buttonData.transform || 'rotate(0deg)',
-              req.userId,
-              imageId
-            ];
-        
-        db.run(
-          updateQuery,
-          updateParams,
-          function(updateErr) {
-            if (updateErr) {
-              console.error('단추 업데이트 오류:', updateErr);
-              return res.status(500).json({ error: '단추 업데이트 실패' });
-            }
-
-            res.json({
-              success: true,
-              buttonId: existing.id,
-              message: '단추가 업데이트되었습니다.'
-            });
-          }
+      } else {
+        // addedAt이 없으면 기존 시간 유지 (업데이트하지 않음)
+        addedAtValue = null;
+      }
+      
+      if (addedAtValue) {
+        await pool.query(
+          `UPDATE user_buttons 
+           SET button_src = $1, button_width = $2, button_height = $3, button_left = $4, button_top = $5, button_transform = $6, added_at = $7
+           WHERE user_id = $8 AND image_id = $9`,
+          [
+            buttonData.src,
+            buttonData.width,
+            buttonData.height,
+            buttonData.left,
+            buttonData.top,
+            buttonData.transform || 'rotate(0deg)',
+            addedAtValue,
+            req.userId,
+            imageId
+          ]
         );
       } else {
-        // 새 단추 추가
-        // 클라이언트에서 보낸 addedAt 사용 (타임스탬프인 경우 ISO 문자열로 변환)
-        let addedAtValue;
-        if (buttonData.addedAt) {
-          // 타임스탬프(숫자)인 경우 ISO 문자열로 변환
-          if (typeof buttonData.addedAt === 'number') {
-            addedAtValue = new Date(buttonData.addedAt).toISOString();
-          } else {
-            // 이미 문자열인 경우 그대로 사용
-            addedAtValue = buttonData.addedAt;
-          }
-        } else {
-          // addedAt이 없으면 현재 서버 시간 사용 (기본값)
-          addedAtValue = new Date().toISOString();
-        }
-        
-        console.log('단추 추가 - 추가 시간:', {
-          클라이언트에서_받은_addedAt: buttonData.addedAt,
-          저장할_시간: addedAtValue,
-          타입: typeof buttonData.addedAt
-        });
-        
-        db.run(
-          `INSERT INTO user_buttons 
-           (user_id, image_id, button_src, button_width, button_height, button_left, button_top, button_transform, added_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        await pool.query(
+          `UPDATE user_buttons 
+           SET button_src = $1, button_width = $2, button_height = $3, button_left = $4, button_top = $5, button_transform = $6
+           WHERE user_id = $7 AND image_id = $8`,
           [
-            req.userId,
-            imageId,
-            buttonData.src || buttonData.button_src,
-            buttonData.width || buttonData.button_width,
-            buttonData.height || buttonData.button_height,
-            buttonData.left || buttonData.button_left,
-            buttonData.top || buttonData.button_top,
+            buttonData.src,
+            buttonData.width,
+            buttonData.height,
+            buttonData.left,
+            buttonData.top,
             buttonData.transform || 'rotate(0deg)',
-            addedAtValue
-          ],
-          function(err) {
-            if (err) {
-              console.error('단추 저장 오류:', err);
-              return res.status(500).json({ error: '단추 저장 실패: ' + err.message });
-            }
-
-            res.json({
-              success: true,
-              buttonId: this.lastID,
-              message: '단추가 저장되었습니다.'
-            });
-          }
+            req.userId,
+            imageId
+          ]
         );
       }
+
+      res.json({
+        success: true,
+        buttonId: existing.id,
+        message: '단추가 업데이트되었습니다.'
+      });
+    } else {
+      // 새 단추 추가
+      // 클라이언트에서 보낸 addedAt 사용 (타임스탬프인 경우 ISO 문자열로 변환)
+      let addedAtValue;
+      if (buttonData.addedAt) {
+        // 타임스탬프(숫자)인 경우 ISO 문자열로 변환
+        if (typeof buttonData.addedAt === 'number') {
+          addedAtValue = new Date(buttonData.addedAt).toISOString();
+        } else {
+          // 이미 문자열인 경우 그대로 사용
+          addedAtValue = buttonData.addedAt;
+        }
+      } else {
+        // addedAt이 없으면 현재 서버 시간 사용 (기본값)
+        addedAtValue = new Date().toISOString();
+      }
+      
+      console.log('단추 추가 - 추가 시간:', {
+        클라이언트에서_받은_addedAt: buttonData.addedAt,
+        저장할_시간: addedAtValue,
+        타입: typeof buttonData.addedAt
+      });
+      
+      const result = await pool.query(
+        `INSERT INTO user_buttons 
+         (user_id, image_id, button_src, button_width, button_height, button_left, button_top, button_transform, added_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+        [
+          req.userId,
+          imageId,
+          buttonData.src || buttonData.button_src,
+          buttonData.width || buttonData.button_width,
+          buttonData.height || buttonData.button_height,
+          buttonData.left || buttonData.button_left,
+          buttonData.top || buttonData.button_top,
+          buttonData.transform || 'rotate(0deg)',
+          addedAtValue
+        ]
+      );
+
+      res.json({
+        success: true,
+        buttonId: result.rows[0].id,
+        message: '단추가 저장되었습니다.'
+      });
     }
-  );
+  } catch (error) {
+    console.error('단추 저장/업데이트 오류:', error);
+    res.status(500).json({ error: '서버 오류' });
+  }
 });
 
 // 이미지의 단추 목록 조회
-app.get('/api/images/:imageId/buttons', authenticateToken, (req, res) => {
+app.get('/api/images/:imageId/buttons', authenticateToken, async (req, res) => {
   const { imageId } = req.params;
 
-  db.all(
-    `SELECT 
-      ub.*,
-      u.nickname as user_nickname
-     FROM user_buttons ub
-     JOIN users u ON ub.user_id = u.id
-     WHERE ub.image_id = ?`,
-    [imageId],
-    (err, buttons) => {
-      if (err) {
-        console.error('단추 조회 오류:', err);
-        return res.status(500).json({ error: '단추 조회 실패' });
-      }
+  try {
+    const result = await pool.query(
+      `SELECT 
+        ub.*,
+        u.nickname as user_nickname
+       FROM user_buttons ub
+       JOIN users u ON ub.user_id = u.id
+       WHERE ub.image_id = $1`,
+      [imageId]
+    );
 
-      const formattedButtons = buttons.map(btn => ({
-        id: btn.id,
-        userId: btn.user_id,
-        imageId: btn.image_id,
-        buttonData: {
-          src: btn.button_src,
-          width: btn.button_width,
-          height: btn.button_height,
-          left: btn.button_left,
-          top: btn.button_top,
-          transform: btn.button_transform
-        },
-        addedAt: btn.added_at
-      }));
+    const buttons = result.rows;
 
-      res.json({ buttons: formattedButtons });
-    }
-  );
+    const formattedButtons = buttons.map(btn => ({
+      id: btn.id,
+      userId: btn.user_id,
+      imageId: btn.image_id,
+      buttonData: {
+        src: btn.button_src,
+        width: btn.button_width,
+        height: btn.button_height,
+        left: btn.button_left,
+        top: btn.button_top,
+        transform: btn.button_transform
+      },
+      addedAt: btn.added_at
+    }));
+
+    res.json({ buttons: formattedButtons });
+  } catch (error) {
+    console.error('단추 조회 오류:', error);
+    res.status(500).json({ error: '단추 조회 실패' });
+  }
 });
 
 // 사용자가 추가한 단추 목록 조회 (단추보기 페이지용)
-app.get('/api/users/buttons', authenticateToken, (req, res) => {
+app.get('/api/users/buttons', authenticateToken, async (req, res) => {
   const query = `
     SELECT 
       ub.*,
@@ -591,15 +578,13 @@ app.get('/api/users/buttons', authenticateToken, (req, res) => {
     FROM user_buttons ub
     JOIN images i ON ub.image_id = i.id
     JOIN users u ON ub.user_id = u.id
-    WHERE ub.user_id = ?
+    WHERE ub.user_id = $1
     ORDER BY ub.added_at DESC
   `;
 
-  db.all(query, [req.userId], (err, userButtons) => {
-    if (err) {
-      console.error('사용자 단추 조회 오류:', err);
-      return res.status(500).json({ error: '단추 조회 실패' });
-    }
+  try {
+    const result = await pool.query(query, [req.userId]);
+    const userButtons = result.rows;
 
     console.log('=== 사용자 단추 조회 결과 ===');
     console.log('조회된 단추 개수:', userButtons ? userButtons.length : 0);
@@ -614,54 +599,48 @@ app.get('/api/users/buttons', authenticateToken, (req, res) => {
     }
 
     res.json({ userButtons: userButtons || [] });
-  });
+  } catch (error) {
+    console.error('사용자 단추 조회 오류:', error);
+    res.status(500).json({ error: '단추 조회 실패' });
+  }
 });
 
 // 업로드된 이미지 파일 서빙
 app.use('/uploads', express.static(uploadsDir));
 
 // 모든 데이터 삭제 (개발/테스트용)
-app.delete('/api/admin/reset-all', authenticateToken, (req, res) => {
-  // 모든 테이블 데이터 삭제
-  db.serialize(() => {
-    db.run('DELETE FROM user_buttons', (err) => {
+app.delete('/api/admin/reset-all', authenticateToken, async (req, res) => {
+  try {
+    // 모든 테이블 데이터 삭제
+    await pool.query('DELETE FROM user_buttons');
+    await pool.query('DELETE FROM images');
+    
+    // 업로드된 파일도 삭제
+    fs.readdir(uploadsDir, (err, files) => {
       if (err) {
-        console.error('단추 삭제 오류:', err);
-        return res.status(500).json({ error: '데이터 삭제 실패' });
+        console.error('파일 목록 읽기 오류:', err);
+        return res.status(500).json({ error: '파일 삭제 실패' });
       }
       
-      db.run('DELETE FROM images', (err) => {
-        if (err) {
-          console.error('이미지 삭제 오류:', err);
-          return res.status(500).json({ error: '데이터 삭제 실패' });
-        }
-        
-        // 업로드된 파일도 삭제
-        fs.readdir(uploadsDir, (err, files) => {
-          if (err) {
-            console.error('파일 목록 읽기 오류:', err);
-            return res.status(500).json({ error: '파일 삭제 실패' });
+      files.forEach(file => {
+        fs.unlink(path.join(uploadsDir, file), (unlinkErr) => {
+          if (unlinkErr && unlinkErr.code !== 'ENOENT') {
+            console.error('파일 삭제 오류:', unlinkErr);
           }
-          
-          files.forEach(file => {
-            fs.unlink(path.join(uploadsDir, file), (unlinkErr) => {
-              if (unlinkErr && unlinkErr.code !== 'ENOENT') {
-                console.error('파일 삭제 오류:', unlinkErr);
-              }
-            });
-          });
-          
-          res.json({ 
-            success: true, 
-            message: '모든 데이터가 삭제되었습니다.' 
-          });
         });
       });
+      
+      res.json({ 
+        success: true, 
+        message: '모든 데이터가 삭제되었습니다.' 
+      });
     });
-  });
+  } catch (error) {
+    console.error('데이터 삭제 오류:', error);
+    res.status(500).json({ error: '데이터 삭제 실패' });
+  }
 });
 
 app.listen(PORT, () => {
   console.log(`서버가 포트 ${PORT}에서 실행 중입니다.`);
 });
-
