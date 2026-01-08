@@ -1810,13 +1810,14 @@ App.placePhotos = async function() {
     
     const finalWidth = Math.max(frameWidth, maxAnchorRight + 50); // 오른쪽 여백 50px
     const fixedHeight = containerHeight; // 세로 고정 (화면 높이)
+    const extraScrollHeight = 20; // 추가 스크롤 가능한 높이 (20px)
     
     photoPreview.style.width = finalWidth + 'px';
-    photoPreview.style.height = containerHeight + 'px'; // 화면 높이로 고정
+    photoPreview.style.height = (containerHeight + extraScrollHeight) + 'px'; // 앵커 위치는 그대로, 컨테이너만 20px 더 크게
     photoPreview.style.minHeight = containerHeight + 'px';
-    photoPreview.style.maxHeight = containerHeight + 'px'; // 세로 스크롤 방지
+    photoPreview.style.maxHeight = (containerHeight + extraScrollHeight) + 'px'; // 최대 높이 설정
     photoPreview.style.overflowX = 'auto'; // 가로 스크롤만 활성화
-    photoPreview.style.overflowY = 'hidden'; // 세로 스크롤 비활성화
+    photoPreview.style.overflowY = 'auto'; // 세로 스크롤 활성화 (약 20px 정도만)
     
     // 앵커 포인트 시각적으로 표시
     App.renderAnchors(photoPreview);
