@@ -6,6 +6,8 @@ const fs = require('fs');
 const { Pool } = require('pg');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 require('dotenv').config();
 
 const app = express();
@@ -16,20 +18,21 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('.')); // 정적 파일 서빙
 
-// 이미지 업로드 디렉토리 생성
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
+// Cloudinary 설정
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
-// Multer 설정 (이미지 업로드)
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadsDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
+// Multer 설정 (Cloudinary 스토리지 사용)
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'danchu-uploads', // Cloudinary 폴더명
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+    resource_type: 'image',
+    transformation: [{ quality: 'auto', fetch_format: 'auto' }] // 자동 최적화
   }
 });
 
@@ -44,6 +47,9 @@ const upload = multer({
     }
   }
 });
+
+// 로컬 업로드 디렉토리 (기존 파일 삭제용으로만 사용)
+const uploadsDir = path.join(__dirname, 'uploads');
 
 // PostgreSQL 데이터베이스 초기화
 const pool = new Pool({
@@ -218,8 +224,13 @@ app.post('/api/images/upload', authenticateToken, upload.single('image'), async 
   }
 
   const { width, height, scale, displayStartAt, displayEndAt, uploadedAt: clientUploadedAt } = req.body;
-  const filename = req.file.filename;
-  const fileUrl = `/uploads/${filename}`;
+  
+  // Cloudinary에서 업로드된 파일 정보
+  const cloudinaryResult = req.file;
+  const fileUrl = cloudinaryResult.secure_url || cloudinaryResult.url; // HTTPS URL 사용
+  const publicId = cloudinaryResult.public_id; // Cloudinary public_id
+  const filename = cloudinaryResult.originalname || cloudinaryResult.filename;
+  
   // 클라이언트에서 보낸 uploadedAt 사용, 없으면 서버 시간 사용
   const uploadedAt = clientUploadedAt || new Date().toISOString();
 
@@ -227,7 +238,7 @@ app.post('/api/images/upload', authenticateToken, upload.single('image'), async 
     const result = await pool.query(
       `INSERT INTO images (user_id, filename, original_filename, src, width, height, scale, uploaded_at, display_start_at, display_end_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
-      [req.userId, filename, req.file.originalname, fileUrl, width, height, scale, uploadedAt, displayStartAt, displayEndAt]
+      [req.userId, publicId, filename, fileUrl, width, height, scale, uploadedAt, displayStartAt, displayEndAt]
     );
 
     const imageId = result.rows[0].id;
@@ -247,6 +258,14 @@ app.post('/api/images/upload', authenticateToken, upload.single('image'), async 
     });
   } catch (error) {
     console.error('이미지 저장 오류:', error);
+    // Cloudinary에서 업로드된 파일 삭제 (롤백)
+    if (publicId) {
+      try {
+        await cloudinary.uploader.destroy(publicId);
+      } catch (deleteError) {
+        console.error('Cloudinary 파일 삭제 실패:', deleteError);
+      }
+    }
     res.status(500).json({ error: '이미지 저장 실패' });
   }
 });
@@ -307,14 +326,17 @@ app.delete('/api/images/:imageId', authenticateToken, async (req, res) => {
     // 이미지 레코드 삭제
     await pool.query('DELETE FROM images WHERE id = $1', [imageId]);
 
-    // 실제 파일도 삭제
-    const filePath = path.join(uploadsDir, image.filename);
-    fs.unlink(filePath, (unlinkErr) => {
-      if (unlinkErr && unlinkErr.code !== 'ENOENT') {
-        // 파일이 없어도 성공으로 처리 (ENOENT)
-        console.error('파일 삭제 오류:', unlinkErr);
+    // Cloudinary에서 파일 삭제
+    try {
+      // filename이 Cloudinary public_id인 경우
+      if (image.filename) {
+        await cloudinary.uploader.destroy(image.filename);
+        console.log('Cloudinary 파일 삭제 완료:', image.filename);
       }
-    });
+    } catch (cloudinaryError) {
+      console.error('Cloudinary 파일 삭제 오류:', cloudinaryError);
+      // Cloudinary 삭제 실패해도 DB 삭제는 완료되었으므로 계속 진행
+    }
 
     res.json({
       success: true,
@@ -529,8 +551,8 @@ app.get('/api/users/buttons', authenticateToken, async (req, res) => {
   }
 });
 
-// 업로드된 이미지 파일 서빙
-app.use('/uploads', express.static(uploadsDir));
+// 업로드된 이미지 파일 서빙 (로컬 파일용, Cloudinary 사용 시 불필요하지만 호환성 유지)
+// app.use('/uploads', express.static(uploadsDir));
 
 // 모든 데이터 삭제 (개발/테스트용)
 app.delete('/api/admin/reset-all', authenticateToken, async (req, res) => {
@@ -539,25 +561,18 @@ app.delete('/api/admin/reset-all', authenticateToken, async (req, res) => {
     await pool.query('DELETE FROM user_buttons');
     await pool.query('DELETE FROM images');
     
-    // 업로드된 파일도 삭제
-    fs.readdir(uploadsDir, (err, files) => {
-      if (err) {
-        console.error('파일 목록 읽기 오류:', err);
-        return res.status(500).json({ error: '파일 삭제 실패' });
-      }
-      
-      files.forEach(file => {
-        fs.unlink(path.join(uploadsDir, file), (unlinkErr) => {
-          if (unlinkErr && unlinkErr.code !== 'ENOENT') {
-            console.error('파일 삭제 오류:', unlinkErr);
-          }
-        });
-      });
-      
-      res.json({ 
-        success: true, 
-        message: '모든 데이터가 삭제되었습니다.' 
-      });
+    // Cloudinary에서 모든 이미지 삭제 (폴더 단위)
+    try {
+      const result = await cloudinary.api.delete_resources_by_prefix('danchu-uploads/');
+      console.log('Cloudinary 파일 삭제 완료:', result);
+    } catch (cloudinaryError) {
+      console.error('Cloudinary 파일 삭제 오류:', cloudinaryError);
+      // Cloudinary 삭제 실패해도 DB 삭제는 완료되었으므로 계속 진행
+    }
+    
+    res.json({ 
+      success: true, 
+      message: '모든 데이터가 삭제되었습니다.' 
     });
   } catch (error) {
     console.error('데이터 삭제 오류:', error);

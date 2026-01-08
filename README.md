@@ -7,11 +7,26 @@
 npm install
 ```
 
-### 2. 환경 변수 설정 (선택사항)
-`.env` 파일을 생성하여 JWT_SECRET을 설정할 수 있습니다:
+### 2. 환경 변수 설정
+`.env` 파일을 생성하여 다음 변수들을 설정합니다:
+
+**필수 환경 변수 (Cloudinary):**
+```
+CLOUDINARY_CLOUD_NAME=your-cloud-name
+CLOUDINARY_API_KEY=your-api-key
+CLOUDINARY_API_SECRET=your-api-secret
+```
+
+**선택 환경 변수:**
 ```
 JWT_SECRET=your-secret-key-here
+DATABASE_URL=your-postgresql-connection-string
 ```
+
+**Cloudinary 계정 생성 방법:**
+1. [Cloudinary](https://cloudinary.com/)에 가입
+2. Dashboard에서 Cloud Name, API Key, API Secret 확인
+3. `.env` 파일에 위 정보 입력
 
 ### 3. 서버 실행
 ```bash
@@ -31,8 +46,10 @@ npm run dev
 2. GitHub 저장소 연결
 3. 빌드 명령: `npm install`
 4. 시작 명령: `npm start`
-5. 환경 변수 설정 (선택사항):
-   - `JWT_SECRET`: JWT 토큰 시크릿 키
+5. 환경 변수 설정:
+   - **필수**: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (Cloudinary 계정 정보)
+   - **선택**: `JWT_SECRET`: JWT 토큰 시크릿 키
+   - **선택**: `DATABASE_URL`: PostgreSQL 연결 문자열 (기본값 사용 가능)
    - `PORT`: 포트 번호 (Render가 자동 설정)
 
 ## 데이터베이스
@@ -53,8 +70,9 @@ SQLite 데이터베이스 (`database.db`)가 자동으로 생성됩니다.
 
 ## 주의사항
 
-- 업로드된 이미지는 `uploads/` 디렉토리에 저장됩니다.
+- **이미지 저장소**: Cloudinary를 사용하여 이미지를 저장합니다. 재배포 시에도 이미지가 유지됩니다.
+- 업로드된 이미지는 Cloudinary에 저장되며, 로컬 `uploads/` 디렉토리는 더 이상 사용되지 않습니다.
 - `.gitignore`에 `uploads/`, `database.db`가 포함되어 있어 Git에 커밋되지 않습니다.
-- 프로덕션 환경에서는 적절한 이미지 저장소(AWS S3 등) 사용을 권장합니다.
+- Cloudinary 무료 플랜: 25GB 저장 공간, 25GB 월간 대역폭 제공
 
 
