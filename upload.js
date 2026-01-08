@@ -201,8 +201,9 @@ App.initUpload = function() {
                             
                             // 모든 사진 로드 완료 시 자동 저장
                             if (loadedCount === totalFiles) {
-                                if (countSpan) countSpan.textContent = App.selectedPhotos.length;
-                                if (selectedCount) selectedCount.style.display = 'block';
+                                // 선택된 사진 개수 표시 숨김 처리
+                                // if (countSpan) countSpan.textContent = App.selectedPhotos.length;
+                                // if (selectedCount) selectedCount.style.display = 'block';
                                 
                                 // API를 통해 서버에 업로드
                                 try {

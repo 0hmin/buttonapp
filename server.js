@@ -7,7 +7,7 @@ const { Pool } = require('pg');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const streamifier = require('streamifier');
 require('dotenv').config();
 
 const app = express();
@@ -19,22 +19,20 @@ app.use(express.json());
 app.use(express.static('.')); // 정적 파일 서빙
 
 // Cloudinary 설정
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
+if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+  cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+  });
+  console.log('Cloudinary 설정 완료');
+} else {
+  console.warn('⚠️  Cloudinary 환경 변수가 설정되지 않았습니다. 이미지 업로드가 작동하지 않을 수 있습니다.');
+  console.warn('   .env 파일에 CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET을 설정하세요.');
+}
 
-// Multer 설정 (Cloudinary 스토리지 사용)
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: {
-    folder: 'danchu-uploads', // Cloudinary 폴더명
-    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
-    resource_type: 'image',
-    transformation: [{ quality: 'auto', fetch_format: 'auto' }] // 자동 최적화
-  }
-});
+// Multer 설정 (메모리 스토리지 사용 - Cloudinary로 직접 업로드)
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage: storage,
@@ -48,13 +46,39 @@ const upload = multer({
   }
 });
 
+// Cloudinary에 이미지 업로드하는 헬퍼 함수
+function uploadToCloudinary(buffer, originalname) {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'danchu-uploads',
+        resource_type: 'image',
+        transformation: [{ quality: 'auto', fetch_format: 'auto' }],
+        allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp']
+      },
+      (error, result) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(result);
+        }
+      }
+    );
+    
+    streamifier.createReadStream(buffer).pipe(uploadStream);
+  });
+}
+
 // 로컬 업로드 디렉토리 (기존 파일 삭제용으로만 사용)
 const uploadsDir = path.join(__dirname, 'uploads');
 
 // PostgreSQL 데이터베이스 초기화
+// PostgreSQL 데이터베이스 초기화
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://button_app_user:5hzsepBECBjyo1KQ32wV2cGe9PbYlCu7@dpg-d5fid32li9vc738pa520-a.oregon-postgres.render.com/button_app',
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+  ssl: {
+    rejectUnauthorized: false // Render.com PostgreSQL은 SSL을 요구하지만 자체 서명 인증서를 사용
+  }
 });
 
 // 데이터베이스 연결 테스트
@@ -219,22 +243,31 @@ app.post('/api/login', async (req, res) => {
 
 // 이미지 업로드
 app.post('/api/images/upload', authenticateToken, upload.single('image'), async (req, res) => {
+  // Cloudinary 설정 확인
+  if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+    return res.status(500).json({ error: 'Cloudinary가 설정되지 않았습니다. 환경 변수를 확인하세요.' });
+  }
+
   if (!req.file) {
     return res.status(400).json({ error: '이미지 파일이 필요합니다.' });
   }
 
   const { width, height, scale, displayStartAt, displayEndAt, uploadedAt: clientUploadedAt } = req.body;
   
-  // Cloudinary에서 업로드된 파일 정보
-  const cloudinaryResult = req.file;
-  const fileUrl = cloudinaryResult.secure_url || cloudinaryResult.url; // HTTPS URL 사용
-  const publicId = cloudinaryResult.public_id; // Cloudinary public_id
-  const filename = cloudinaryResult.originalname || cloudinaryResult.filename;
-  
   // 클라이언트에서 보낸 uploadedAt 사용, 없으면 서버 시간 사용
   const uploadedAt = clientUploadedAt || new Date().toISOString();
 
+  let cloudinaryResult = null;
+  let publicId = null;
+
   try {
+    // Cloudinary에 이미지 업로드
+    cloudinaryResult = await uploadToCloudinary(req.file.buffer, req.file.originalname);
+    const fileUrl = cloudinaryResult.secure_url; // HTTPS URL 사용
+    publicId = cloudinaryResult.public_id; // Cloudinary public_id
+    const filename = req.file.originalname;
+
+    // 데이터베이스에 저장
     const result = await pool.query(
       `INSERT INTO images (user_id, filename, original_filename, src, width, height, scale, uploaded_at, display_start_at, display_end_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
@@ -257,7 +290,8 @@ app.post('/api/images/upload', authenticateToken, upload.single('image'), async 
       }
     });
   } catch (error) {
-    console.error('이미지 저장 오류:', error);
+    console.error('이미지 업로드 오류:', error);
+    
     // Cloudinary에서 업로드된 파일 삭제 (롤백)
     if (publicId) {
       try {
@@ -266,7 +300,11 @@ app.post('/api/images/upload', authenticateToken, upload.single('image'), async 
         console.error('Cloudinary 파일 삭제 실패:', deleteError);
       }
     }
-    res.status(500).json({ error: '이미지 저장 실패' });
+    
+    res.status(500).json({ 
+      error: '이미지 업로드 실패', 
+      details: error.message || '알 수 없는 오류가 발생했습니다.' 
+    });
   }
 });
 

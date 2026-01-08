@@ -591,6 +591,7 @@ body {
 }
 
 .selected-count {
+    display: none !important; /* 선택된 사진 개수 표시 숨김 */
     margin: 20px 0;
     padding: 15px 20px;
     background-color: rgba(255, 255, 255, 0.9);
