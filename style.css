@@ -1,0 +1,1312 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    width: 100vw;
+    min-height: 100vh;
+    background-color: #000;
+    overflow: auto;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+@media (max-width: 480px) {
+    body {
+        background-image: url('화면배경.png');
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+    }
+}
+
+.container {
+    width: 100%;
+    max-width: 100vw;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 20px;
+    overflow-x: auto;
+}
+
+.mobile-frame {
+    width: 100%;
+    max-width: 375px;
+    min-height: 100vh;
+    background-image: url('화면배경.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    position: relative;
+    overflow: visible;
+}
+
+
+.screen {
+    display: none;
+    width: 100%;
+    min-height: 100vh;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    overflow: visible;
+}
+
+#gallery-screen {
+    overflow-x: auto;
+    overflow-y: hidden;
+    width: 100%;
+    position: relative;
+    height: 100vh;
+    max-height: 100vh;
+    background-image: url('보드배경.png');
+    background-size: auto;
+    background-position: top left;
+    background-repeat: repeat;
+}
+
+.screen.active {
+    display: flex !important;
+}
+
+#login-screen {
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background-image: url('온보딩배경.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+#login-form-screen {
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    position: relative;
+}
+
+#signup-screen {
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    position: relative;
+}
+
+.login-container {
+    width: 100%;
+    max-width: 320px;
+    background-color: rgba(255, 255, 255, 0.95);
+    border-radius: 20px;
+    padding: 40px 30px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    position: relative;
+    z-index: 100;
+    pointer-events: auto;
+}
+
+/* 로그인 화면에 배경 이미지 추가 */
+#login-form-screen .login-container {
+    background-image: url('로그인.png');
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-color: transparent;
+    box-shadow: none;
+    padding: 0;
+    width: 316px;
+    aspect-ratio: 1328 / 988; /* 원본 이미지 비율 유지 */
+    margin: 0 auto; /* 화면 가운데 정렬 */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 0;
+}
+
+/* 회원가입 화면에 배경 이미지 추가 */
+#signup-screen .login-container {
+    background-image: url('회원가입.png');
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-color: transparent;
+    box-shadow: none;
+    padding: 0;
+    width: 316px;
+    aspect-ratio: 1328 / 988; /* 원본 이미지 비율 유지 */
+    margin: 0 auto; /* 화면 가운데 정렬 */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 0;
+}
+
+.login-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: #333;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.login-subtitle {
+    font-size: 14px;
+    color: #666;
+    text-align: center;
+    margin-bottom: 30px;
+    line-height: 1.5;
+}
+
+/* 회원가입 화면에서 제목과 부제목 숨김 */
+#signup-screen .login-title,
+#signup-screen .login-subtitle {
+    display: none;
+}
+
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    width: 100%;
+}
+
+.login-choice-buttons {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0px;
+    width: auto;
+    height: 100vh;
+    margin: 0;
+    padding-top: 40vh;
+    z-index: 100;
+    pointer-events: auto;
+}
+
+.choice-button {
+    width: 100%;
+    padding: 20px;
+    font-size: 16px;
+    font-weight: 600;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    z-index: 100;
+    pointer-events: auto;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.choice-button-primary {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.choice-button-primary:hover {
+    background-color: #45a049;
+}
+
+.choice-button-secondary {
+    background-color: #f5f5f5;
+    color: #333;
+}
+
+.choice-button-secondary:hover {
+    background-color: #e0e0e0;
+}
+
+.choice-button-image {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    transition: opacity 0.3s ease;
+    z-index: 100;
+    pointer-events: auto;
+    -webkit-tap-highlight-color: transparent;
+    display: inline-block;
+    line-height: 0;
+    vertical-align: top;
+    transform: scale(0.7);
+    transform-origin: center center;
+}
+
+.choice-button-image:hover {
+    opacity: 0.9;
+}
+
+.choice-button-image:active {
+    opacity: 0.8;
+}
+
+.choice-button-img {
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    display: block;
+}
+
+/* 로그인/회원가입 화면의 input 필드 스타일 및 위치 조정 */
+#login-form-screen .nickname-input,
+#signup-screen .nickname-input {
+    position: absolute;
+    top: 40%; /* 컨테이너의 40% 위치 */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 230px; /* 너비 248px */
+    height: 33px;
+    box-sizing: border-box;
+    border-radius: 0;
+    border: 1px solid #FFF;
+    background: #FFF;
+    padding: 0 10px;
+    font-size: 12px;
+    font-family: Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-weight: 300;
+    text-align: left; /* 왼쪽 정렬 */
+}
+
+#login-form-screen .nickname-input::placeholder,
+#signup-screen .nickname-input::placeholder {
+    text-align: left; /* 왼쪽 정렬 */
+    font-family: Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-weight: 300;
+    font-size: 12px;
+    color: #25130B;
+}
+
+#login-form-screen .password-input,
+#signup-screen .password-input {
+    position: absolute;
+    top: calc(40% + 33px + 8px); /* 닉네임 input 아래 8px 간격 */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 230px; /* 너비 248px */
+    height: 33px;
+    box-sizing: border-box;
+    border-radius: 0;
+    border: 1px solid #FFF;
+    background: #FFF;
+    padding: 0 10px;
+    font-size: 12px;
+    font-family: Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-weight: 300;
+    text-align: left; /* 왼쪽 정렬 */
+    letter-spacing: 4px;
+}
+
+#login-form-screen .password-input::placeholder,
+#signup-screen .password-input::placeholder {
+    text-align: left; /* 왼쪽 정렬 */
+    font-family: Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-weight: 300;
+    font-size: 12px;
+    letter-spacing: 0;
+    color: #25130B;
+}
+
+/* 로그인 버튼 이미지 스타일 */
+#login-form-screen .login-button-image {
+    position: absolute;
+    top: calc(40% + 33px + 8px + 33px + 12px); /* 비밀번호 input 아래 12px 간격 */
+    left: 50%;
+    transform: translateX(-50%);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    z-index: 10;
+    width: 121px; /* 121px로 고정 */
+    height: auto;
+}
+
+#login-form-screen .login-button-img {
+    width: 121px; /* 121px로 고정 */
+    height: auto;
+    display: block;
+}
+
+/* 회원가입 버튼 이미지 스타일 */
+#signup-screen .signup-button-image {
+    position: absolute;
+    top: calc(40% + 33px + 8px + 33px + 12px); /* 비밀번호 input 아래 12px 간격 */
+    left: 50%;
+    transform: translateX(-50%);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    z-index: 10;
+    width: 121px;
+    height: auto;
+}
+
+#signup-screen .signup-button-img {
+    width: 121px;
+    height: auto;
+    display: block;
+}
+
+/* 뒤로가기 버튼 왼쪽 상단 위치 */
+.back-button-top-left {
+    position: absolute;
+    top: 20px; /* 20px 간격 */
+    left: 10px; /* 10px 간격 */
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    z-index: 1001; /* 다른 요소 위에 표시 */
+}
+
+.back-button-img {
+    width: 86px; /* 홈버튼과 동일한 크기 */
+    height: auto; /* 비율 유지 */
+    display: block;
+    object-fit: contain;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 20px;
+    margin: 20px 20px 0;
+    background-color: rgba(255, 255, 255, 0.9);
+    border-radius: 12px;
+    font-size: 14px;
+}
+
+.user-info #current-user-name {
+    font-weight: 600;
+    color: #333;
+}
+
+#upload-screen {
+    position: relative;
+    overflow: hidden;
+    overflow-y: hidden;
+}
+
+#photo-upload-screen {
+    position: relative;
+    background-image: url('화면배경.png');
+    background-size: contain;
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    overflow-y: auto;
+    padding: 0;
+    overflow-x: hidden;
+}
+
+.logout-button-fixed {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    pointer-events: auto;
+}
+
+.logout-button-fixed:hover {
+    opacity: 0.8;
+    transform: translateY(-1px);
+}
+
+.logout-button-fixed:active {
+    transform: translateY(0);
+}
+
+.logout-button-image {
+    width: 106px; /* 424px × 0.25 = 106px */
+    height: auto; /* 원본 비율 유지: 156px × 0.25 = 39px */
+    object-fit: contain;
+    display: block;
+}
+
+/* 기존 로그아웃 버튼 스타일 (호환성 유지) */
+.logout-button {
+    padding: 6px 12px;
+    font-size: 12px;
+    color: #f44336;
+    background-color: transparent;
+    border: 1px solid #f44336;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.logout-button:hover {
+    background-color: #f44336;
+    color: white;
+}
+
+.upload-container {
+    margin-top: 80px;
+    margin-bottom: 0;
+    display: flex;
+    justify-content: flex-start;
+    width: 100%;
+}
+
+.home-button-fixed {
+    position: fixed;
+    top: 10px;
+    padding: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    pointer-events: auto;
+}
+
+/* 데스크탑에서 모바일 프레임의 왼쪽 상단 기준으로 위치 (container가 center 정렬이므로 계산 필요) */
+@media (min-width: 481px) {
+    .home-button-fixed {
+        left: calc(50% - 187.5px + 10px); /* 50% - (375px / 2) + 10px 오프셋 */
+    }
+}
+
+/* 모바일에서는 화면 왼쪽 상단 */
+@media (max-width: 480px) {
+    .home-button-fixed {
+        left: 10px;
+    }
+}
+
+.home-button-fixed:hover {
+    opacity: 0.8;
+    transform: translateY(-1px);
+}
+
+.home-button-fixed:active {
+    transform: translateY(0);
+}
+
+.home-button-image {
+    width: 86px; /* 343px × 0.25 = 85.75px */
+    height: auto; /* 원본 비율 유지: 156px × 0.25 = 39px */
+    object-fit: contain;
+    display: block;
+}
+
+.upload-button {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    width: 100%;
+    max-width: 85%;
+    margin-top: 0;
+    padding-left: 20px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.3s ease;
+}
+
+.upload-button:hover {
+    opacity: 0.9;
+}
+
+.upload-button:active {
+    opacity: 0.8;
+}
+
+.upload-button-image {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 15px;
+}
+
+.upload-icon {
+    font-size: 48px;
+    margin-bottom: 10px;
+}
+
+.upload-text {
+    font-size: 16px;
+    color: #333;
+    font-weight: 500;
+}
+
+.upload-status {
+    margin: 20px 0;
+    padding: 15px 20px;
+    background-color: rgba(255, 255, 255, 0.9);
+    border-radius: 10px;
+    font-size: 14px;
+    text-align: center;
+}
+
+#upload-status-text {
+    font-weight: 600;
+    margin-bottom: 5px;
+    font-size: 16px;
+}
+
+#upload-status-time {
+    font-size: 12px;
+    color: #666;
+}
+
+.selected-count {
+    margin: 20px 0;
+    padding: 15px 20px;
+    background-color: rgba(255, 255, 255, 0.9);
+    border-radius: 10px;
+    font-size: 14px;
+    color: #333;
+    text-align: center;
+}
+
+.view-board-container {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+}
+
+.view-board-button {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    width: 100%;
+    max-width: 75%;
+    margin-top: 0;
+    padding-right: 20px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.3s ease;
+}
+
+.view-board-button:hover {
+    opacity: 0.9;
+}
+
+.view-board-button:active {
+    opacity: 0.8;
+}
+
+.view-board-image {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 15px;
+}
+
+.view-buttons-container {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-start;
+    width: 100%;
+}
+
+.view-buttons-button {
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    width: 100%;
+    max-width: 85%;
+    margin-top: 0;
+    padding-left: 20px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.3s ease;
+}
+
+.view-buttons-button:hover {
+    opacity: 0.9;
+}
+
+.view-buttons-button:active {
+    opacity: 0.8;
+}
+
+.view-buttons-image {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 15px;
+}
+
+/* 단추보기 화면 스타일 */
+#my-buttons-screen {
+    position: relative;
+    padding: 20px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background-image: url('보드배경.png');
+    background-size: auto;
+    background-position: top left;
+    background-repeat: repeat;
+}
+
+.my-buttons-container {
+    width: 100%;
+    max-width: 100%;
+    padding-top: 60px; /* 홈 버튼 공간 확보 */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.my-button-date-header {
+    width: 80%;
+    color: #422510;
+    font-family: Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 16px;
+    font-style: normal;
+    font-weight: 200;
+    line-height: normal;
+    background-image: url('날짜bg.png');
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    padding: 10px 20px;
+    margin-bottom: 10px;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 단추보기 페이지에서 단추가 없을 때 표시할 이미지 스타일 (오전안내.png와 같은 위치) */
+.my-buttons-empty-image {
+    position: absolute;
+    top: calc(20px + 39px + 20px); /* 홈 버튼 높이(39px) + 20px 간격, 오전안내.png와 동일한 위치 */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 90%;
+    height: auto;
+    z-index: 100;
+    pointer-events: none;
+}
+
+.my-button-date-group {
+    width: 80%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.my-button-item {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 0;
+}
+
+.my-button-image-wrapper {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+}
+
+.my-button-background {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 0;
+}
+
+.my-button-image {
+    width: 100%;
+    height: auto;
+    display: block;
+    position: relative;
+    z-index: 1;
+}
+
+.photo-preview {
+    position: relative;
+    width: auto;
+    min-width: 100%;
+    height: 100vh;
+    max-height: 100vh;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.photo-wrapper {
+    position: absolute;
+    display: block;
+    z-index: 1; /* 단추보다 뒤에 위치하도록 낮은 z-index */
+}
+
+.photo-background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: 1;
+}
+
+.photo-image {
+    position: absolute;
+    top: 50px;
+    left: 50px;
+    z-index: 2;
+    display: block;
+    max-width: 100%;
+    height: auto;
+}
+
+/* 단추가 모든 사진 위에 표시되도록 높은 z-index 설정 */
+.reaction-button {
+    z-index: 9999 !important;
+    position: absolute !important;
+}
+
+.button-guide-container {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    z-index: 100;
+    pointer-events: none;
+}
+
+.button-guide-image {
+    max-width: 350px;
+    width: auto;
+    height: auto;
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.attach-button {
+    padding: 12px 30px;
+    background-color: rgba(76, 175, 80, 0.9);
+    border: none;
+    border-radius: 25px;
+    font-size: 16px;
+    font-weight: 600;
+    color: white;
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    pointer-events: auto;
+    position: relative;
+}
+
+.attach-button.attached {
+    position: fixed;
+    transform: none;
+    transition: all 0.5s ease;
+}
+
+/* 모바일 최적화 */
+@media (max-width: 480px) {
+    .mobile-frame {
+        max-width: 100%;
+        min-height: 100vh;
+        background-image: none;
+        background-color: transparent;
+    }
+    
+    .container {
+        padding: 0;
+    }
+    
+    .upload-label {
+        padding: 15px 25px;
+    }
+    
+    .upload-icon {
+        font-size: 40px;
+    }
+    
+    .upload-text {
+        font-size: 14px;
+    }
+    
+    .button-guide-container {
+        bottom: 15px;
+    }
+    
+    .button-guide-image {
+        max-width: 350px;
+    }
+    
+    .attach-button {
+        padding: 10px 25px;
+        font-size: 14px;
+    }
+}
+
+/* 시간 조작 패널 (개발 모드) */
+.time-control-panel {
+    margin: 20px 0;
+    padding: 15px;
+    background-color: rgba(255, 255, 255, 0.95);
+    border-radius: 10px;
+    border: 2px solid #ff9800;
+    font-size: 13px;
+}
+
+.time-control-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-weight: 600;
+    color: #ff9800;
+}
+
+.toggle-time-btn {
+    padding: 5px 10px;
+    background-color: #ff9800;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.toggle-time-btn:hover {
+    background-color: #f57c00;
+}
+
+.time-control-content {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.time-control-info {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 10px;
+    background-color: rgba(255, 152, 0, 0.1);
+    border-radius: 5px;
+    font-size: 12px;
+}
+
+.time-control-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.time-btn {
+    padding: 8px 12px;
+    background-color: #2196F3;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex: 1;
+    min-width: 80px;
+}
+
+.time-btn:hover {
+    background-color: #1976D2;
+}
+
+.time-control-preset {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.preset-label {
+    font-weight: 600;
+    margin-bottom: 5px;
+    color: #666;
+}
+
+.preset-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 8px;
+    background-color: rgba(0, 0, 0, 0.03);
+    border-radius: 5px;
+}
+
+.preset-group-title {
+    font-weight: 600;
+    font-size: 11px;
+    color: #999;
+    margin-bottom: 3px;
+}
+
+.preset-btn {
+    padding: 6px 10px;
+    background-color: #9C27B0;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+}
+
+.preset-btn:hover {
+    background-color: #7B1FA2;
+}
+
+.time-control-reset {
+    margin-top: 5px;
+}
+
+.reset-time-btn {
+    padding: 8px 15px;
+    background-color: #f44336;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    width: 100%;
+}
+
+.reset-time-btn:hover {
+    background-color: #d32f2f;
+}
+
+@media (max-width: 480px) {
+    .time-control-panel {
+        padding: 10px;
+        font-size: 12px;
+    }
+    
+    .time-btn {
+        min-width: 70px;
+        font-size: 11px;
+        padding: 6px 8px;
+    }
+    
+    .preset-btn {
+        font-size: 10px;
+        padding: 5px 8px;
+    }
+}
+
+/* 팝업 스타일 */
+.popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.popup-container {
+    position: relative;
+    max-width: 85%;
+    max-height: 85%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.popup-image {
+    max-width: 100%;
+    max-height: 85vh;
+    height: auto;
+    object-fit: contain;
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+/* 데스크탑에서 모바일 프레임의 85% 크기로 제한 */
+@media (min-width: 481px) {
+    .popup-container {
+        max-width: 318.75px; /* 375px * 0.85 = 318.75px */
+        width: 318.75px;
+    }
+    
+    .popup-image {
+        width: 100%;
+        max-width: 318.75px;
+    }
+}
+
+.close-popup-btn {
+    position: absolute;
+    top: -40px;
+    right: 0;
+    width: 35px;
+    height: 35px;
+    background-color: rgba(255, 255, 255, 0.9);
+    border: none;
+    border-radius: 50%;
+    font-size: 20px;
+    color: #333;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.close-popup-btn:hover {
+    background-color: rgba(255, 255, 255, 1);
+    transform: scale(1.1);
+}
+
+.close-popup-btn:active {
+    transform: scale(0.95);
+}
+
+@media (max-width: 480px) {
+    .popup-container {
+        max-width: 85%;
+        max-height: 85%;
+    }
+    
+    .popup-image {
+        max-height: 85vh;
+    }
+    
+    .close-popup-btn {
+        top: -35px;
+        width: 30px;
+        height: 30px;
+        font-size: 18px;
+    }
+}
+
+.login-error {
+    color: #f44336;
+    font-size: 12px;
+    margin-top: 5px;
+    text-align: center;
+}
+
+/* 앵커 포인트 스타일 */
+.anchor-point {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10000;
+    pointer-events: none;
+    transition: all 0.2s ease;
+    opacity: 0; /* 투명하게 설정 */
+}
+
+.anchor-point.available {
+    background-color: #44ff44;
+    border: 2px solid #00cc00;
+    box-shadow: 0 0 4px rgba(68, 255, 68, 0.5);
+    opacity: 0; /* 투명하게 설정 */
+}
+
+.anchor-point.occupied {
+    background-color: #ff4444;
+    border: 2px solid #cc0000;
+    box-shadow: 0 0 4px rgba(255, 68, 68, 0.5);
+    opacity: 0; /* 투명하게 설정 */
+}
+
+/* 사진 업로드 페이지 스타일 */
+#photo-upload-screen .back-button-top-left {
+    top: 20px;
+    left: 10px;
+    z-index: 1001;
+}
+
+.upload-guide-image {
+    position: absolute;
+    top: calc(20px + 39px + 20px); /* 뒤로가기 버튼 높이(39px, 홈버튼과 동일) + 20px 간격 */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    height: auto;
+    max-width: 90%;
+    z-index: 100;
+}
+
+.upload-guide-image img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.upload-photos-container {
+    position: relative;
+    width: 100%;
+    margin-top: calc(20px + 39px + 20px + 100px + 20px); /* 뒤로가기 버튼 높이(39px, 홈버튼과 동일) + 20px 간격 + 안내 이미지 높이(100px) + 20px 간격 */
+    padding: 0 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 100px; /* 플로팅 버튼 공간 확보 */
+}
+
+.empty-photo-placeholder {
+    width: auto;
+    height: auto;
+    max-width: 90%;
+    display: block;
+}
+
+.uploaded-photos-list {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.uploaded-photo-item {
+    position: relative;
+    width: 270px;
+    margin: 0 auto;
+}
+
+.uploaded-photo-item img {
+    width: 270px;
+    height: auto;
+    display: block;
+    border-radius: 0;
+}
+
+.delete-photo-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 35px;
+    height: 35px;
+    background-color: rgba(255, 255, 255, 0.9);
+    border: none;
+    border-radius: 50%;
+    font-size: 20px;
+    color: #333;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    z-index: 10;
+}
+
+.delete-photo-btn:hover {
+    background-color: rgba(255, 255, 255, 1);
+    transform: scale(1.1);
+}
+
+.delete-photo-btn:active {
+    transform: scale(0.95);
+}
+
+@media (max-width: 480px) {
+    .delete-photo-btn {
+        width: 30px;
+        height: 30px;
+        font-size: 18px;
+    }
+}
+
+.add-photo-floating-btn {
+    position: fixed;
+    top: 85vh;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.25);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    z-index: 10000;
+    pointer-events: auto;
+    transition: opacity 0.3s ease;
+}
+
+
+/* photo-upload-screen이 활성화되지 않았을 때 사진추가 버튼 숨김 */
+.screen:not(.active) .add-photo-floating-btn {
+    display: none;
+}
+
+.add-photo-floating-btn:hover {
+    opacity: 0.9;
+}
+
+.add-photo-floating-btn:active {
+    opacity: 0.8;
+}
+
+.add-photo-btn-img {
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    display: block;
+}
+
+/* 데스크탑에서 모바일 프레임의 center 위치 기준으로 조정 */
+@media (min-width: 481px) {
+    .add-photo-floating-btn {
+        left: 50%;
+    }
+}
+
+/* 모바일에서는 화면 기준 - 데스크탑과 같은 크기로 보이도록 scale 조정 */
+@media (max-width: 480px) {
+    .add-photo-floating-btn {
+        left: 50%;
+        transform: translate(-50%, -50%) scale(1); /* 모바일에서 원본 크기 (데스크탑 모바일 프레임에서 보이는 비율과 비슷하게) */
+    }
+}

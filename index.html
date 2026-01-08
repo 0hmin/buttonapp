@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>사진 업로드</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="mobile-frame">
+            <!-- 로그인 선택 화면 -->
+            <div id="login-screen" class="screen active">
+                <div class="login-choice-buttons">
+                    <button type="button" id="signup-btn" class="choice-button-image">
+                        <img src="회원가입bt.png" alt="회원가입" class="choice-button-img">
+                    </button>
+                    <button type="button" id="login-btn" class="choice-button-image">
+                        <img src="로그인bt.png" alt="로그인" class="choice-button-img">
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 회원가입 화면 -->
+            <div id="signup-screen" class="screen">
+                <button type="button" id="back-to-choice-btn" class="back-button-top-left">
+                    <img src="홈버튼.png" alt="홈" class="back-button-img">
+                </button>
+                <div class="login-container">
+                    <form id="signup-form" class="login-form">
+                        <input 
+                            type="text" 
+                            id="signup-nickname-input" 
+                            class="nickname-input" 
+                            placeholder="닉네임을 입력하세요"
+                            maxlength="20"
+                            required
+                            autocomplete="off"
+                        >
+                        <input 
+                            type="password" 
+                            id="signup-password-input" 
+                            class="password-input" 
+                            placeholder="비밀번호 숫자 4자리"
+                            maxlength="4"
+                            pattern="[0-9]{4}"
+                            required
+                            autocomplete="new-password"
+                        >
+                        <div id="signup-error" class="login-error" style="display: none;"></div>
+                        <button type="submit" class="signup-button-image">
+                            <img src="회원가입버튼.png" alt="회원가입" class="signup-button-img">
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- 로그인 화면 -->
+            <div id="login-form-screen" class="screen">
+                <button type="button" id="back-to-choice-btn2" class="back-button-top-left">
+                    <img src="홈버튼.png" alt="홈" class="back-button-img">
+                </button>
+                <div class="login-container">
+                    <form id="login-form" class="login-form">
+                        <input 
+                            type="text" 
+                            id="login-nickname-input" 
+                            class="nickname-input" 
+                            placeholder="닉네임을 입력하세요"
+                            maxlength="20"
+                            required
+                            autocomplete="username"
+                        >
+                        <input 
+                            type="password" 
+                            id="login-password-input" 
+                            class="password-input" 
+                            placeholder="비밀번호 숫자 4자리"
+                            maxlength="4"
+                            pattern="[0-9]{4}"
+                            required
+                            autocomplete="current-password"
+                        >
+                        <div id="login-error" class="login-error" style="display: none;"></div>
+                        <button type="submit" class="login-button-image">
+                            <img src="로그인버튼.png" alt="로그인" class="login-button-img">
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- 메인 화면 -->
+            <div id="upload-screen" class="screen">
+                <button type="button" id="logout-btn" class="logout-button-fixed">
+                    <img src="로그아웃button.png" alt="로그아웃" class="logout-button-image">
+                </button>
+                <div class="upload-container">
+                    <button type="button" id="go-to-photo-upload-btn" class="upload-button">
+                        <img src="사진올리기button.png" alt="사진 올리기" class="upload-button-image">
+                    </button>
+                </div>
+                <div class="view-board-container">
+                    <button id="view-board-btn" class="view-board-button">
+                        <img src="사진보기button.png" alt="보드 보기" class="view-board-image">
+                    </button>
+                </div>
+                <div class="view-buttons-container">
+                    <button id="view-buttons-btn" class="view-buttons-button">
+                        <img src="단추보기.png" alt="단추 보기" class="view-buttons-image">
+                    </button>
+                </div>
+                <!-- 개발 모드: 시간 조작 패널 -->
+                <div id="time-control-panel" class="time-control-panel" style="display: none;">
+                    <div class="time-control-header">
+                        <span>🕐 시간 조작 (개발 모드)</span>
+                        <button id="toggle-time-panel" class="toggle-time-btn">접기</button>
+                    </div>
+                    <div class="time-control-content">
+                        <div class="time-control-info">
+                            <div>현재 시간: <span id="current-time-display"></span></div>
+                            <div>오프셋: <span id="time-offset-display"></span></div>
+                        </div>
+                        <div class="time-control-buttons">
+                            <button class="time-btn" data-offset="-3600000">-1시간</button>
+                            <button class="time-btn" data-offset="-1800000">-30분</button>
+                            <button class="time-btn" data-offset="-600000">-10분</button>
+                            <button class="time-btn" data-offset="600000">+10분</button>
+                            <button class="time-btn" data-offset="1800000">+30분</button>
+                            <button class="time-btn" data-offset="3600000">+1시간</button>
+                        </div>
+                        <div class="time-control-preset">
+                            <div class="preset-label">프리셋:</div>
+                            <div class="preset-group">
+                                <div class="preset-group-title">업로드 가능 시간:</div>
+                                <button class="preset-btn" data-hour="0" data-minute="0">00:00 (업로드 가능)</button>
+                                <button class="preset-btn" data-hour="5" data-minute="0">05:00 (업로드 가능)</button>
+                            </div>
+                            <div class="preset-group">
+                                <div class="preset-group-title">노출 시간:</div>
+                                <button class="preset-btn" data-hour="6" data-minute="0">06:00 (노출 시작)</button>
+                                <button class="preset-btn" data-hour="9" data-minute="0">09:00 (노출 중)</button>
+                                <button class="preset-btn" data-hour="11" data-minute="0">11:00 (노출 중)</button>
+                            </div>
+                            <div class="preset-group">
+                                <div class="preset-group-title">노출 종료 후:</div>
+                                <button class="preset-btn" data-hour="12" data-minute="0">12:00 (노출 종료)</button>
+                                <button class="preset-btn" data-hour="13" data-minute="0">13:00 (업로드 가능)</button>
+                            </div>
+                        </div>
+                        <div class="time-control-reset">
+                            <button id="reset-time-btn" class="reset-time-btn">시간 초기화</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 사진 업로드 페이지 -->
+            <div id="photo-upload-screen" class="screen">
+                <button type="button" id="back-from-upload-btn" class="back-button-top-left">
+                    <img src="홈버튼.png" alt="홈" class="back-button-img">
+                </button>
+                <div id="upload-guide-image" class="upload-guide-image"></div>
+                <div id="upload-photos-container" class="upload-photos-container">
+                    <img id="empty-photo-placeholder" src="빈사진.png" alt="빈 사진" class="empty-photo-placeholder" style="display: none;">
+                    <div id="uploaded-photos-list" class="uploaded-photos-list"></div>
+                </div>
+                <button type="button" id="add-photo-btn" class="add-photo-floating-btn">
+                    <img src="사진추가bt.png" alt="사진 추가" class="add-photo-btn-img">
+                    <input type="file" id="photo-upload" accept="image/*" multiple hidden>
+                </button>
+                <div id="upload-status" class="upload-status" style="display: none;">
+                    <div id="upload-status-text"></div>
+                    <div id="upload-status-time"></div>
+                </div>
+                <div id="selected-photos-count" class="selected-count" style="display: none;">
+                    선택된 사진: <span id="count">0</span>개
+                </div>
+            </div>
+            
+            <!-- 사진 보기 화면 -->
+            <div id="gallery-screen" class="screen">
+                <button id="go-to-upload-btn" class="home-button-fixed">
+                    <img src="홈버튼.png" alt="홈" class="home-button-image">
+                </button>
+                <div id="photo-preview" class="photo-preview"></div>
+                <div id="button-guide-container" class="button-guide-container">
+                    <img id="button-guide-image" src="단추안내.png" alt="단추 안내" class="button-guide-image">
+                </div>
+            </div>
+            
+            <!-- 단추보기 화면 -->
+            <div id="my-buttons-screen" class="screen">
+                <button id="go-to-upload-btn-from-buttons" class="home-button-fixed">
+                    <img src="홈버튼.png" alt="홈" class="home-button-image">
+                </button>
+                <div id="my-buttons-container" class="my-buttons-container"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 팝업 이미지 -->
+    <div id="popup-overlay" class="popup-overlay" style="display: none;">
+        <div class="popup-container">
+            <img src="팝업.png" alt="팝업" class="popup-image">
+            <button id="close-popup-btn" class="close-popup-btn">✕</button>
+        </div>
+    </div>
+    <script src="windowUtils.js"></script>
+    <script src="api.js"></script>
+    <script src="common.js"></script>
+    <script src="auth.js"></script>
+    <script src="upload.js"></script>
+    <script src="gallery.js"></script>
+    <script src="myButtons.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
+

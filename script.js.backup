@@ -1,0 +1,2000 @@
+document.addEventListener('DOMContentLoaded', function() {
+    const photoUpload = document.getElementById('photo-upload');
+    const photoPreview = document.getElementById('photo-preview');
+    const mobileFrame = document.querySelector('.mobile-frame');
+    const uploadScreen = document.getElementById('upload-screen');
+    const galleryScreen = document.getElementById('gallery-screen');
+    const loginScreen = document.getElementById('login-screen');
+    const signupScreen = document.getElementById('signup-screen');
+    const loginFormScreen = document.getElementById('login-form-screen');
+    const goToUploadBtn = document.getElementById('go-to-upload-btn');
+    const viewBoardBtn = document.getElementById('view-board-btn');
+    const selectedCount = document.getElementById('selected-photos-count');
+    const countSpan = document.getElementById('count');
+    const uploadStatus = document.getElementById('upload-status');
+    const uploadStatusText = document.getElementById('upload-status-text');
+    const uploadStatusTime = document.getElementById('upload-status-time');
+    
+    let selectedPhotos = []; // 선택된 사진 데이터 저장
+    
+    // ============================================
+    // 로그인 관련 함수들
+    // ============================================
+    
+    const CURRENT_USER_KEY = 'current_user';
+    const USERS_DATA_KEY = 'users_data'; // {닉네임: 비밀번호} 형태로 저장
+    
+    /**
+     * 사용자 데이터 가져오기
+     */
+    function getUsersData() {
+        try {
+            const data = localStorage.getItem(USERS_DATA_KEY);
+            return data ? JSON.parse(data) : {};
+        } catch (e) {
+            return {};
+        }
+    }
+    
+    /**
+     * 사용자 데이터 저장
+     */
+    function saveUsersData(usersData) {
+        try {
+            localStorage.setItem(USERS_DATA_KEY, JSON.stringify(usersData));
+            return true;
+        } catch (e) {
+            console.error('사용자 데이터 저장 실패:', e);
+            return false;
+        }
+    }
+    
+    /**
+     * 현재 로그인한 사용자 가져오기
+     */
+    function getCurrentUser() {
+        try {
+            return localStorage.getItem(CURRENT_USER_KEY);
+        } catch (e) {
+            return null;
+        }
+    }
+    
+    /**
+     * 현재 사용자 설정
+     */
+    function setCurrentUser(nickname) {
+        try {
+            localStorage.setItem(CURRENT_USER_KEY, nickname);
+        } catch (e) {
+            console.error('사용자 저장 실패:', e);
+        }
+    }
+    
+    /**
+     * 닉네임 중복 체크
+     */
+    function isNicknameTaken(nickname) {
+        const usersData = getUsersData();
+        return nickname in usersData;
+    }
+    
+    /**
+     * 비밀번호 검증 (숫자 4자리)
+     */
+    function validatePassword(password) {
+        if (!password || password.length !== 4) {
+            return { valid: false, message: '비밀번호는 숫자 4자리여야 합니다.' };
+        }
+        
+        const pattern = /^[0-9]{4}$/;
+        if (!pattern.test(password)) {
+            return { valid: false, message: '비밀번호는 숫자만 입력 가능합니다.' };
+        }
+        
+        return { valid: true };
+    }
+    
+    /**
+     * 닉네임 유효성 검사
+     */
+    function validateNickname(nickname) {
+        if (!nickname || nickname.trim().length === 0) {
+            return { valid: false, message: '닉네임을 입력해주세요.' };
+        }
+        
+        const trimmed = nickname.trim();
+        
+        if (trimmed.length < 2) {
+            return { valid: false, message: '닉네임은 2자 이상 입력해주세요.' };
+        }
+        
+        if (trimmed.length > 20) {
+            return { valid: false, message: '닉네임은 20자 이하로 입력해주세요.' };
+        }
+        
+        // 특수문자 체크 (한글, 영문, 숫자만 허용)
+        const pattern = /^[가-힣a-zA-Z0-9]+$/;
+        if (!pattern.test(trimmed)) {
+            return { valid: false, message: '닉네임은 한글, 영문, 숫자만 사용 가능합니다.' };
+        }
+        
+        return { valid: true, nickname: trimmed };
+    }
+    
+    /**
+     * 회원가입 처리
+     */
+    async function handleSignup(nickname, password) {
+        // 닉네임 유효성 검사
+        const nicknameValidation = validateNickname(nickname);
+        if (!nicknameValidation.valid) {
+            showSignupError(nicknameValidation.message);
+            return false;
+        }
+        
+        const trimmedNickname = nicknameValidation.nickname;
+        
+        // 비밀번호 유효성 검사
+        const passwordValidation = validatePassword(password);
+        if (!passwordValidation.valid) {
+            showSignupError(passwordValidation.message);
+            return false;
+        }
+        
+        // 닉네임 중복 체크
+        if (isNicknameTaken(trimmedNickname)) {
+            showSignupError('이미 사용 중인 닉네임입니다.');
+            return false;
+        }
+        
+        // 사용자 등록
+        const usersData = getUsersData();
+        usersData[trimmedNickname] = password;
+        
+        if (!saveUsersData(usersData)) {
+            showSignupError('회원가입에 실패했습니다.');
+            return false;
+        }
+        
+        // 자동 로그인
+        setCurrentUser(trimmedNickname);
+        hideSignupError();
+        
+        // IndexedDB 초기화
+        try {
+            await initDB();
+            await migrateFromLocalStorage();
+        } catch (e) {
+            console.error('초기화 중 오류:', e);
+        }
+        
+        showScreen('upload');
+        updateUserInfo();
+        return true;
+    }
+    
+    /**
+     * 로그인 처리
+     */
+    async function handleLogin(nickname, password) {
+        // 닉네임 유효성 검사
+        if (!nickname || !nickname.trim()) {
+            showLoginError('닉네임을 입력해주세요.');
+            return false;
+        }
+        
+        const trimmedNickname = nickname.trim();
+        
+        // 비밀번호 검증
+        const passwordValidation = validatePassword(password);
+        if (!passwordValidation.valid) {
+            showLoginError(passwordValidation.message);
+            return false;
+        }
+        
+        // 사용자 존재 확인
+        const usersData = getUsersData();
+        if (!(trimmedNickname in usersData)) {
+            showLoginError('등록되지 않은 닉네임입니다.');
+            return false;
+        }
+        
+        // 비밀번호 확인
+        if (usersData[trimmedNickname] !== password) {
+            showLoginError('비밀번호가 일치하지 않습니다.');
+            return false;
+        }
+        
+        // 로그인 성공
+        setCurrentUser(trimmedNickname);
+        hideLoginError();
+        
+        // IndexedDB 초기화
+        try {
+            await initDB();
+            await migrateFromLocalStorage();
+        } catch (e) {
+            console.error('초기화 중 오류:', e);
+        }
+        
+        showScreen('upload');
+        updateUserInfo();
+        return true;
+    }
+    
+    /**
+     * 로그인 오류 메시지 표시
+     */
+    function showLoginError(message) {
+        const errorDiv = document.getElementById('login-error');
+        if (errorDiv) {
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+    }
+    
+    /**
+     * 로그인 오류 메시지 숨기기
+     */
+    function hideLoginError() {
+        const errorDiv = document.getElementById('login-error');
+        if (errorDiv) {
+            errorDiv.style.display = 'none';
+        }
+    }
+    
+    /**
+     * 회원가입 오류 메시지 표시
+     */
+    function showSignupError(message) {
+        const errorDiv = document.getElementById('signup-error');
+        if (errorDiv) {
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+    }
+    
+    /**
+     * 회원가입 오류 메시지 숨기기
+     */
+    function hideSignupError() {
+        const errorDiv = document.getElementById('signup-error');
+        if (errorDiv) {
+            errorDiv.style.display = 'none';
+        }
+    }
+    
+    /**
+     * 로그인 화면 초기화
+     */
+    function initLoginScreen() {
+        const loginScreen = document.getElementById('login-screen');
+        const signupScreen = document.getElementById('signup-screen');
+        const loginFormScreen = document.getElementById('login-form-screen');
+        
+        // 처음이신가요? 선택 버튼
+        const signupBtn = document.getElementById('signup-btn');
+        const loginBtn = document.getElementById('login-btn');
+        
+        console.log('버튼 찾기:', { signupBtn, loginBtn });
+        
+        if (signupBtn) {
+            signupBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('회원가입 버튼 클릭됨');
+                showScreen('signup');
+            });
+        } else {
+            console.error('회원가입 버튼을 찾을 수 없습니다!');
+        }
+        
+        if (loginBtn) {
+            loginBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('로그인 버튼 클릭됨');
+                showScreen('login-form');
+            });
+        } else {
+            console.error('로그인 버튼을 찾을 수 없습니다!');
+        }
+        
+        // 회원가입 폼
+        const signupForm = document.getElementById('signup-form');
+        const signupNicknameInput = document.getElementById('signup-nickname-input');
+        const signupPasswordInput = document.getElementById('signup-password-input');
+        const backToChoiceBtn = document.getElementById('back-to-choice-btn');
+        
+        if (signupForm) {
+            signupForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const nickname = signupNicknameInput.value.trim();
+                const password = signupPasswordInput.value;
+                await handleSignup(nickname, password);
+            });
+        }
+        
+        if (backToChoiceBtn) {
+            backToChoiceBtn.addEventListener('click', function() {
+                showScreen('login');
+                hideSignupError();
+                if (signupNicknameInput) signupNicknameInput.value = '';
+                if (signupPasswordInput) signupPasswordInput.value = '';
+            });
+        }
+        
+        if (signupNicknameInput) {
+            signupNicknameInput.addEventListener('input', hideSignupError);
+        }
+        if (signupPasswordInput) {
+            signupPasswordInput.addEventListener('input', hideSignupError);
+        }
+        
+        // 로그인 폼
+        const loginForm = document.getElementById('login-form');
+        const loginNicknameInput = document.getElementById('login-nickname-input');
+        const loginPasswordInput = document.getElementById('login-password-input');
+        const backToChoiceBtn2 = document.getElementById('back-to-choice-btn2');
+        
+        if (loginForm) {
+            loginForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const nickname = loginNicknameInput.value.trim();
+                const password = loginPasswordInput.value;
+                await handleLogin(nickname, password);
+            });
+        }
+        
+        if (backToChoiceBtn2) {
+            backToChoiceBtn2.addEventListener('click', function() {
+                showScreen('login');
+                hideLoginError();
+                if (loginNicknameInput) loginNicknameInput.value = '';
+                if (loginPasswordInput) loginPasswordInput.value = '';
+            });
+        }
+        
+        if (loginNicknameInput) {
+            loginNicknameInput.addEventListener('input', hideLoginError);
+        }
+        if (loginPasswordInput) {
+            loginPasswordInput.addEventListener('input', hideLoginError);
+        }
+    }
+    
+    // 로그인 화면 초기화 (선택적 로그인용)
+    initLoginScreen();
+    
+    /**
+     * 현재 사용자 정보 표시
+     */
+    function updateUserInfo() {
+        const userInfo = document.getElementById('user-info');
+        const userNameSpan = document.getElementById('current-user-name');
+        const logoutBtn = document.getElementById('logout-btn');
+        
+        if (userInfo && userNameSpan) {
+            const currentUser = getCurrentUser();
+            if (currentUser) {
+                userNameSpan.textContent = currentUser;
+                userInfo.style.display = 'flex';
+            } else {
+                userInfo.style.display = 'none';
+            }
+        }
+        
+        if (logoutBtn) {
+            // 기존 이벤트 리스너 제거 후 새로 추가
+            logoutBtn.replaceWith(logoutBtn.cloneNode(true));
+            const newLogoutBtn = document.getElementById('logout-btn');
+            newLogoutBtn.addEventListener('click', function() {
+                // 로그아웃 처리
+                localStorage.removeItem(CURRENT_USER_KEY);
+                showScreen('login');
+                userInfo.style.display = 'none';
+            });
+        }
+    }
+    
+    // 페이지 로드 시 로그인 상태 확인
+    const currentUser = getCurrentUser();
+    if (currentUser) {
+        // 이미 로그인되어 있으면 메인 화면으로
+        updateUserInfo();
+        showScreen('upload');
+        // IndexedDB 초기화
+        (async () => {
+            try {
+                await initDB();
+                await migrateFromLocalStorage();
+            } catch (e) {
+                console.error('초기화 중 오류:', e);
+            }
+        })();
+    } else {
+        // 로그인 안 되어 있으면 로그인 선택 화면 표시
+        showScreen('login');
+    }
+    
+    // IndexedDB 데이터베이스 설정
+    const DB_NAME = 'button_images_db';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'images';
+    let db = null;
+    
+    /**
+     * IndexedDB 데이터베이스 초기화
+     */
+    function initDB() {
+        return new Promise((resolve, reject) => {
+            if (db) {
+                resolve(db);
+                return;
+            }
+            
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
+            
+            request.onerror = () => {
+                console.error('IndexedDB 오픈 실패:', request.error);
+                reject(request.error);
+            };
+            
+            request.onsuccess = () => {
+                db = request.result;
+                console.log('IndexedDB 연결 성공');
+                resolve(db);
+            };
+            
+            request.onupgradeneeded = (event) => {
+                const database = event.target.result;
+                if (!database.objectStoreNames.contains(STORE_NAME)) {
+                    const objectStore = database.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                    objectStore.createIndex('uploaded_at', 'uploaded_at', { unique: false });
+                    objectStore.createIndex('display_start_at', 'display_start_at', { unique: false });
+                    objectStore.createIndex('display_end_at', 'display_end_at', { unique: false });
+                    console.log('IndexedDB 스토어 생성 완료');
+                }
+            };
+        });
+    }
+    
+    /**
+     * 기존 localStorage 데이터를 IndexedDB로 마이그레이션
+     */
+    async function migrateFromLocalStorage() {
+        try {
+            const localStorageData = localStorage.getItem('window_based_images');
+            if (localStorageData) {
+                const images = JSON.parse(localStorageData);
+                if (images.length > 0) {
+                    console.log('localStorage에서 IndexedDB로 마이그레이션 시작:', images.length, '개');
+                    await saveImagesToStorage(images);
+                    // 마이그레이션 완료 후 localStorage 삭제
+                    localStorage.removeItem('window_based_images');
+                    console.log('마이그레이션 완료');
+                }
+            }
+        } catch (e) {
+            console.error('마이그레이션 중 오류:', e);
+        }
+    }
+    
+    // ============================================
+    // 시간 윈도우 관련 함수들
+    // ============================================
+    
+    // 시간 조작 관련 상수
+    const TIME_OFFSET_KEY = 'time_offset_ms';
+    const TIME_PANEL_VISIBLE_KEY = 'time_panel_visible';
+    
+    /**
+     * 시간 오프셋 가져오기 (로컬 스토리지)
+     */
+    function getTimeOffset() {
+        try {
+            const offset = localStorage.getItem(TIME_OFFSET_KEY);
+            return offset ? parseInt(offset, 10) : 0;
+        } catch (e) {
+            return 0;
+        }
+    }
+    
+    /**
+     * 시간 오프셋 설정
+     */
+    function setTimeOffset(offsetMs) {
+        try {
+            localStorage.setItem(TIME_OFFSET_KEY, offsetMs.toString());
+            updateTimeDisplay();
+            updateUploadStatus();
+            // 보드 화면이면 이미지도 다시 로드
+            if (galleryScreen.classList.contains('active')) {
+                loadVisibleImages();
+            }
+        } catch (e) {
+            console.error('Failed to set time offset:', e);
+        }
+    }
+    
+    /**
+     * 시간 오프셋 초기화
+     */
+    function resetTimeOffset() {
+        setTimeOffset(0);
+    }
+    
+    /**
+     * 서버 시간 가져오기 (실제로는 API에서 가져와야 함)
+     * 개발 모드에서는 오프셋 적용
+     */
+    function getServerTime() {
+        // 실제로는: return fetch('/api/time').then(r => r.json()).then(d => new Date(d.time));
+        const realTime = new Date();
+        const offset = getTimeOffset();
+        return new Date(realTime.getTime() + offset);
+    }
+    
+    /**
+     * 시간 표시 업데이트
+     */
+    function updateTimeDisplay() {
+        const currentTime = getServerTime();
+        const offset = getTimeOffset();
+        const realTime = new Date();
+        
+        const currentTimeDisplay = document.getElementById('current-time-display');
+        const timeOffsetDisplay = document.getElementById('time-offset-display');
+        
+        if (currentTimeDisplay) {
+            currentTimeDisplay.textContent = currentTime.toLocaleString('ko-KR', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+        
+        if (timeOffsetDisplay) {
+            if (offset === 0) {
+                timeOffsetDisplay.textContent = '없음';
+                timeOffsetDisplay.style.color = '#666';
+            } else {
+                const hours = Math.floor(Math.abs(offset) / (1000 * 60 * 60));
+                const minutes = Math.floor((Math.abs(offset) % (1000 * 60 * 60)) / (1000 * 60));
+                const sign = offset > 0 ? '+' : '-';
+                timeOffsetDisplay.textContent = `${sign}${hours}시간 ${minutes}분`;
+                timeOffsetDisplay.style.color = '#f44336';
+            }
+        }
+    }
+    
+    /**
+     * 업로드 가능 여부 확인 및 UI 업데이트
+     * 새로운 로직: 업로드는 항상 가능
+     */
+    function updateUploadStatus() {
+        const currentTime = getServerTime();
+        
+        uploadStatus.style.display = 'block';
+        uploadStatusText.textContent = '✅ 업로드 가능 (항상)';
+        uploadStatusText.style.color = '#4CAF50';
+        
+        // 다음 노출 시간 안내
+        const displayWindow = calculateDisplayWindow(currentTime);
+        const displayStart = new Date(displayWindow.start);
+        const now = new Date(currentTime);
+        
+        if (displayStart > now) {
+            const timeUntilDisplay = displayStart.getTime() - now.getTime();
+            const hours = Math.floor(timeUntilDisplay / (1000 * 60 * 60));
+            const minutes = Math.floor((timeUntilDisplay % (1000 * 60 * 60)) / (1000 * 60));
+            uploadStatusTime.textContent = `노출 시간: ${displayStart.toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} (${hours}시간 ${minutes}분 후)`;
+        } else {
+            uploadStatusTime.textContent = `현재 노출 시간: ${displayStart.toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} ~ ${new Date(displayWindow.end).toLocaleString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`;
+        }
+    }
+    
+    /**
+     * IndexedDB에서 모든 이미지 불러오기
+     */
+    async function loadImagesFromStorage() {
+        try {
+            await initDB();
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], 'readonly');
+                const objectStore = transaction.objectStore(STORE_NAME);
+                const request = objectStore.getAll();
+                
+                request.onsuccess = () => {
+                    resolve(request.result || []);
+                };
+                
+                request.onerror = () => {
+                    console.error('이미지 로드 실패:', request.error);
+                    resolve([]);
+                };
+            });
+        } catch (e) {
+            console.error('Failed to load images from storage:', e);
+            return [];
+        }
+    }
+    
+    /**
+     * 이미지 압축 함수
+     * @param {string} dataUrl - 원본 이미지의 data URL
+     * @param {number} maxWidth - 최대 너비 (기본값: 800px)
+     * @param {number} quality - JPEG 품질 (0.0 ~ 1.0, 기본값: 0.7)
+     * @returns {Promise<string>} 압축된 이미지의 data URL
+     */
+    function compressImage(dataUrl, maxWidth = 800, quality = 0.7) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                
+                // 너비가 maxWidth보다 크면 비율에 맞춰 축소
+                if (width > maxWidth) {
+                    height = (height * maxWidth) / width;
+                    width = maxWidth;
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // JPEG로 변환 (압축)
+                const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+                resolve(compressedDataUrl);
+            };
+            img.onerror = reject;
+            img.src = dataUrl;
+        });
+    }
+    
+    /**
+     * IndexedDB에 이미지 저장 (배치 저장)
+     */
+    async function saveImagesToStorage(images) {
+        try {
+            await initDB();
+            
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], 'readwrite');
+                const objectStore = transaction.objectStore(STORE_NAME);
+                
+                // 기존 데이터 모두 삭제
+                const clearRequest = objectStore.clear();
+                
+                clearRequest.onsuccess = () => {
+                    // 새 데이터 추가
+                    let completed = 0;
+                    let hasError = false;
+                    
+                    if (images.length === 0) {
+                        resolve();
+                        return;
+                    }
+                    
+                    images.forEach((image, index) => {
+                        const addRequest = objectStore.add(image);
+                        
+                        addRequest.onsuccess = () => {
+                            completed++;
+                            if (completed === images.length && !hasError) {
+                                console.log('IndexedDB 저장 완료 - 이미지 개수:', images.length);
+                                resolve();
+                            }
+                        };
+                        
+                        addRequest.onerror = () => {
+                            hasError = true;
+                            console.error('이미지 저장 실패:', addRequest.error);
+                            reject(addRequest.error);
+                        };
+                    });
+                };
+                
+                clearRequest.onerror = () => {
+                    console.error('데이터 삭제 실패:', clearRequest.error);
+                    reject(clearRequest.error);
+                };
+            });
+        } catch (e) {
+            console.error('Failed to save images to storage:', e);
+            throw e;
+        }
+    }
+    
+    /**
+     * IndexedDB에서 이미지 삭제
+     */
+    async function deleteImageFromStorage(imageId) {
+        try {
+            await initDB();
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], 'readwrite');
+                const objectStore = transaction.objectStore(STORE_NAME);
+                const request = objectStore.delete(imageId);
+                
+                request.onsuccess = () => {
+                    resolve();
+                };
+                
+                request.onerror = () => {
+                    reject(request.error);
+                };
+            });
+        } catch (e) {
+            console.error('이미지 삭제 실패:', e);
+            throw e;
+        }
+    }
+    
+    /**
+     * 기존 이미지의 노출 시간 재계산 (잘못 계산된 경우 수정)
+     */
+    async function recalculateDisplayWindows() {
+        const allImages = await loadImagesFromStorage();
+        let needsUpdate = false;
+        
+        console.log('=== 노출 시간 재계산 시작 ===');
+        
+        allImages.forEach(img => {
+            if (img.uploaded_at) {
+                const uploadTime = new Date(img.uploaded_at);
+                const uploadLocalHour = uploadTime.getHours();
+                
+                console.log('재계산 대상 이미지:', {
+                    id: img.id,
+                    uploaded_at: img.uploaded_at,
+                    uploaded_at_local: uploadTime.toLocaleString('ko-KR'),
+                    uploadLocalHour: uploadLocalHour,
+                    current_display_start: img.display_start_at
+                });
+                
+                const newDisplayWindow = calculateDisplayWindow(uploadTime);
+                
+                // 기존 노출 시간과 비교
+                const oldStart = new Date(img.display_start_at);
+                const newStart = newDisplayWindow.start;
+                
+                // 노출 시간이 다르면 업데이트
+                if (oldStart.getTime() !== newStart.getTime()) {
+                    console.log('노출 시간 재계산 필요:', {
+                        id: img.id,
+                        uploaded_at: img.uploaded_at,
+                        uploaded_at_local: uploadTime.toLocaleString('ko-KR'),
+                        uploadLocalHour: uploadLocalHour,
+                        old_display_start: img.display_start_at,
+                        old_display_start_local: oldStart.toLocaleString('ko-KR'),
+                        new_display_start: newStart.toISOString(),
+                        new_display_start_local: newStart.toLocaleString('ko-KR')
+                    });
+                    
+                    img.display_start_at = newStart.toISOString();
+                    img.display_end_at = newDisplayWindow.end.toISOString();
+                    needsUpdate = true;
+                } else {
+                    console.log('노출 시간 정상:', {
+                        id: img.id,
+                        display_start: img.display_start_at
+                    });
+                }
+            }
+        });
+        
+        if (needsUpdate) {
+            await saveImagesToStorage(allImages);
+            console.log('노출 시간 재계산 완료. 저장된 이미지 업데이트됨.');
+        } else {
+            console.log('노출 시간 재계산 불필요. 모든 이미지가 올바른 노출 시간을 가지고 있습니다.');
+        }
+    }
+    
+    /**
+     * 노출 가능한 이미지만 필터링하여 보드에 표시
+     */
+    async function loadVisibleImages() {
+        // 먼저 노출 시간 재계산 (잘못 계산된 경우 수정)
+        await recalculateDisplayWindows();
+        
+        const allImages = await loadImagesFromStorage();
+        const currentTime = getServerTime();
+        
+        console.log('=== 이미지 로드 디버깅 ===');
+        console.log('전체 이미지 개수:', allImages.length);
+        console.log('현재 시간:', currentTime.toISOString());
+        console.log('현재 시간 (로컬):', currentTime.toLocaleString('ko-KR'));
+        
+        if (allImages.length > 0) {
+            console.log('저장된 이미지들:');
+            allImages.forEach((img, idx) => {
+                const displayStart = new Date(img.display_start_at);
+                const displayEnd = new Date(img.display_end_at);
+                const now = new Date(currentTime);
+                const isVisible = now >= displayStart && now < displayEnd;
+                
+                console.log(`이미지 ${idx + 1}:`, {
+                    id: img.id,
+                    uploaded_at: img.uploaded_at,
+                    uploaded_at_local: new Date(img.uploaded_at).toLocaleString('ko-KR'),
+                    display_start_at: img.display_start_at,
+                    display_end_at: img.display_end_at,
+                    display_start_local: displayStart.toLocaleString('ko-KR'),
+                    display_end_local: displayEnd.toLocaleString('ko-KR'),
+                    isVisible: isVisible,
+                    now: now.toLocaleString('ko-KR')
+                });
+            });
+        }
+        
+        const visibleImages = filterVisibleImages(allImages, currentTime);
+        console.log('노출 가능한 이미지 개수:', visibleImages.length);
+        console.log('노출 가능한 이미지 ID들:', visibleImages.map(img => img.id || 'no-id'));
+        
+        // 이미지 데이터 구조 확인
+        if (visibleImages.length > 0) {
+            console.log('첫 번째 이미지 데이터 구조:', {
+                id: visibleImages[0].id,
+                hasSrc: !!visibleImages[0].src,
+                srcType: visibleImages[0].src ? (visibleImages[0].src.substring(0, 50) + '...') : '없음',
+                hasBgWidth: !!visibleImages[0].bgWidth,
+                bgWidth: visibleImages[0].bgWidth,
+                hasImgWidth: !!visibleImages[0].imgWidth,
+                imgWidth: visibleImages[0].imgWidth
+            });
+        }
+        
+        // 보드에 표시
+        if (visibleImages.length > 0) {
+            selectedPhotos = visibleImages;
+            console.log('selectedPhotos에 할당된 이미지 개수:', selectedPhotos.length);
+            await placePhotos();
+        } else {
+            // 노출 가능한 이미지가 없을 때 상세 정보 표시
+            let message = '';
+            if (allImages.length > 0) {
+                message = `저장된 이미지 ${allImages.length}개가 있지만, 현재 시간에 노출 가능한 이미지가 없습니다.<br>`;
+                message += `현재 시간: ${currentTime.toLocaleString('ko-KR')}<br><br>`;
+                message += '저장된 이미지들의 노출 시간:<br>';
+                allImages.forEach((img, idx) => {
+                    const start = new Date(img.display_start_at);
+                    const end = new Date(img.display_end_at);
+                    message += `${idx + 1}. ${start.toLocaleString('ko-KR')} ~ ${end.toLocaleString('ko-KR')}<br>`;
+                });
+            } else {
+                message = '저장된 이미지가 없습니다.';
+            }
+            photoPreview.innerHTML = `<div style="padding: 20px; text-align: center; color: #666; font-size: 12px;">${message}</div>`;
+        }
+    }
+    
+    // ============================================
+    // 시간 조작 UI 초기화
+    // ============================================
+    
+    const timeControlPanel = document.getElementById('time-control-panel');
+    const toggleTimePanel = document.getElementById('toggle-time-panel');
+    const resetTimeBtn = document.getElementById('reset-time-btn');
+    
+    // 시간 조작 패널 표시/숨김
+    function toggleTimePanelVisibility() {
+        if (timeControlPanel) {
+            const isVisible = timeControlPanel.style.display !== 'none';
+            timeControlPanel.style.display = isVisible ? 'none' : 'block';
+            if (toggleTimePanel) {
+                toggleTimePanel.textContent = isVisible ? '펼치기' : '접기';
+            }
+            try {
+                localStorage.setItem(TIME_PANEL_VISIBLE_KEY, (!isVisible).toString());
+            } catch (e) {}
+        }
+    }
+    
+    // 시간 조작 버튼 이벤트 설정
+    if (timeControlPanel) {
+        // 오프셋 버튼들
+        const timeButtons = timeControlPanel.querySelectorAll('.time-btn');
+        timeButtons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const offset = parseInt(this.dataset.offset, 10);
+                const currentOffset = getTimeOffset();
+                setTimeOffset(currentOffset + offset);
+            });
+        });
+        
+        // 프리셋 버튼들
+        const presetButtons = timeControlPanel.querySelectorAll('.preset-btn');
+        presetButtons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const hour = parseInt(this.dataset.hour, 10);
+                const minute = parseInt(this.dataset.minute, 10);
+                
+                const now = new Date();
+                const targetTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minute, 0, 0);
+                
+                // 오늘 해당 시간이 지났으면 내일로 설정
+                if (targetTime < now) {
+                    targetTime.setDate(targetTime.getDate() + 1);
+                }
+                
+                const offset = targetTime.getTime() - now.getTime();
+                setTimeOffset(offset);
+            });
+        });
+        
+        // 초기화 버튼
+        if (resetTimeBtn) {
+            resetTimeBtn.addEventListener('click', resetTimeOffset);
+        }
+        
+        // 토글 버튼
+        if (toggleTimePanel) {
+            toggleTimePanel.addEventListener('click', toggleTimePanelVisibility);
+        }
+        
+        // 패널 표시 상태 복원
+        try {
+            const wasVisible = localStorage.getItem(TIME_PANEL_VISIBLE_KEY) === 'true';
+            if (wasVisible) {
+                timeControlPanel.style.display = 'block';
+                if (toggleTimePanel) {
+                    toggleTimePanel.textContent = '접기';
+                }
+            }
+        } catch (e) {}
+        
+        // 개발 모드: 시간 조작 패널 기본 표시
+        if (timeControlPanel.style.display === 'none') {
+            timeControlPanel.style.display = 'block';
+        }
+    }
+    
+    // 초기 업로드 상태 확인
+    updateUploadStatus();
+    updateTimeDisplay();
+    updateViewBoardButton();
+    // 1분마다 업로드 상태 및 시간 표시 업데이트
+    setInterval(() => {
+        updateUploadStatus();
+        updateTimeDisplay();
+        updateViewBoardButton();
+    }, 60000);
+    
+    // 화면 전환 함수
+    function showScreen(screenName) {
+        console.log('showScreen 호출됨:', screenName);
+        console.log('화면 요소들:', { loginScreen, signupScreen, loginFormScreen, uploadScreen, galleryScreen });
+        
+        // 모든 화면 비활성화
+        if (loginScreen) {
+            loginScreen.classList.remove('active');
+            console.log('login-screen active 제거');
+        }
+        if (signupScreen) {
+            signupScreen.classList.remove('active');
+            console.log('signup-screen active 제거');
+        }
+        if (loginFormScreen) {
+            loginFormScreen.classList.remove('active');
+            console.log('login-form-screen active 제거');
+        }
+        if (uploadScreen) {
+            uploadScreen.classList.remove('active');
+        }
+        if (galleryScreen) {
+            galleryScreen.classList.remove('active');
+        }
+        
+        // 선택한 화면 활성화
+        if (screenName === 'login') {
+            if (loginScreen) {
+                loginScreen.classList.add('active');
+                console.log('login-screen active 추가됨');
+            }
+        } else if (screenName === 'signup') {
+            if (signupScreen) {
+                signupScreen.classList.add('active');
+                console.log('signup-screen active 추가됨');
+            } else {
+                console.error('signupScreen 요소를 찾을 수 없습니다!');
+            }
+        } else if (screenName === 'login-form') {
+            if (loginFormScreen) {
+                loginFormScreen.classList.add('active');
+                console.log('login-form-screen active 추가됨');
+            } else {
+                console.error('loginFormScreen 요소를 찾을 수 없습니다!');
+            }
+        } else if (screenName === 'upload') {
+            if (uploadScreen) uploadScreen.classList.add('active');
+        } else if (screenName === 'gallery') {
+            if (galleryScreen) galleryScreen.classList.add('active');
+        }
+    }
+    
+    // 업로드 화면으로 이동
+    goToUploadBtn.addEventListener('click', function() {
+        updateUploadStatus();
+        showScreen('upload');
+    });
+    
+    // 갤러리 화면 진입 시 노출 가능한 이미지 로드
+    galleryScreen.addEventListener('click', function(e) {
+        if (e.target.id === 'go-to-upload-btn' || e.target.closest('#go-to-upload-btn')) {
+            return;
+        }
+        // 갤러리 화면이 활성화될 때 노출 가능한 이미지 로드
+        if (galleryScreen.classList.contains('active')) {
+            loadVisibleImages();
+        }
+    });
+    
+    // 페이지 로드 시 IndexedDB 초기화 및 마이그레이션 (로그인된 경우에만)
+    (async () => {
+        const currentUser = getCurrentUser();
+        if (!currentUser) {
+            // 로그인 안 되어 있으면 초기화 중단
+            return;
+        }
+        
+        try {
+            await initDB();
+            await migrateFromLocalStorage();
+            
+            // 화면 배경 클릭 시 이벤트 차단 (한 번만 설정)
+            if (photoPreview) {
+                photoPreview.addEventListener('click', function(e) {
+                    // 사진이나 버튼이 아닌 빈 영역(photo-preview 자체)을 클릭했을 때만 이벤트 차단
+                    if (e.target === photoPreview) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                    }
+                });
+            }
+            
+            // 갤러리 화면이면 노출 가능한 이미지 로드
+            if (galleryScreen && galleryScreen.classList.contains('active')) {
+                await loadVisibleImages();
+            }
+        } catch (e) {
+            console.error('초기화 중 오류:', e);
+        }
+    })();
+    
+    // 사진 선택 시 처리
+    photoUpload.addEventListener('change', async function(e) {
+        const files = Array.from(e.target.files);
+        const currentTime = getServerTime();
+        
+        // 업로드는 항상 가능 (시간 제한 없음)
+        
+        selectedPhotos = []; // 기존 선택 초기화
+        
+        let loadedCount = 0;
+        const totalFiles = files.filter(f => f.type.startsWith('image/')).length;
+        
+        if (totalFiles === 0) return;
+        
+        files.forEach(function(file) {
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                
+                reader.onload = async function(e) {
+                    try {
+                        // 이미지 압축
+                        const compressedDataUrl = await compressImage(e.target.result, 800, 0.7);
+                        
+                    const img = new Image();
+                    
+                    img.onload = async function() {
+                        const frameWidth = mobileFrame ? mobileFrame.offsetWidth - 40 : window.innerWidth - 40;
+                        
+                        // 이미지 크기 가져오기
+                        const imgWidth = img.width;
+                        const imgHeight = img.height;
+                        
+                        // 배경 크기 계산 (이미지 크기의 1.05배)
+                        const bgWidth = imgWidth * 1.05;
+                        const bgHeight = imgHeight * 1.05;
+                        
+                        console.log('배경 크기 계산 (1.05배):', {
+                            imgWidth: imgWidth,
+                            imgHeight: imgHeight,
+                            bgWidth: bgWidth,
+                            bgHeight: bgHeight,
+                            widthRatio: (bgWidth / imgWidth).toFixed(3),
+                            heightRatio: (bgHeight / imgHeight).toFixed(3)
+                        });
+                        
+                        // 1차 축소: 모바일 화면에 맞게 축소
+                        const widthScale = frameWidth / bgWidth;
+                        const firstScale = Math.min(widthScale, 1);
+                        
+                        // 1차 축소된 크기
+                        const firstScaledBgWidth = bgWidth * firstScale;
+                        const firstScaledBgHeight = bgHeight * firstScale;
+                        const firstScaledImgWidth = imgWidth * firstScale;
+                        const firstScaledImgHeight = imgHeight * firstScale;
+                        // 패딩은 배경 크기와 이미지 크기의 차이의 절반
+                        const firstScaledPadding = (firstScaledBgWidth - firstScaledImgWidth) / 2;
+                        
+                        // 2차 랜덤 스케일 (0.7 ~ 0.9)
+                        const randomScale = 0.7 + Math.random() * 0.2;
+                        
+                        // 최종 크기 계산
+                        const finalBgWidth = firstScaledBgWidth * randomScale;
+                        const finalBgHeight = firstScaledBgHeight * randomScale;
+                        const finalImgWidth = firstScaledImgWidth * randomScale;
+                        const finalImgHeight = firstScaledImgHeight * randomScale;
+                        const finalPadding = firstScaledPadding * randomScale;
+                        
+                            // 사진 데이터 저장 (압축된 이미지 사용)
+                            const photoData = {
+                                src: compressedDataUrl, // 압축된 이미지 사용
+                            bgWidth: finalBgWidth,
+                            bgHeight: finalBgHeight,
+                            imgWidth: finalImgWidth,
+                            imgHeight: finalImgHeight,
+                            padding: finalPadding
+                            };
+                            
+                            selectedPhotos.push(photoData);
+                        
+                        loadedCount++;
+                        
+                            // 모든 사진 로드 완료 시 자동 저장
+                        if (loadedCount === totalFiles) {
+                            countSpan.textContent = selectedPhotos.length;
+                            selectedCount.style.display = 'block';
+                                
+                                // 각 이미지에 노출 시간 정보 추가 및 저장
+                                // 위치와 반응 정보는 아직 없으므로 null로 설정 (나중에 배치될 때 저장됨)
+                                const imagesToSave = selectedPhotos.map(photo => {
+                                    const imageWithWindow = addDisplayWindowToImage(photo, currentTime);
+                                    return {
+                                        ...imageWithWindow,
+                                        id: generateImageId(), // 고유 ID 생성
+                                        // 위치 정보 (처음 배치될 때 저장됨)
+                                        position: null,
+                                        // 반응 정보 (초기값)
+                                        reactionCount: 0,
+                                        currentWidth: photo.imgWidth,
+                                        currentHeight: photo.imgHeight,
+                                        currentPadding: photo.padding,
+                                        currentBgWidth: photo.bgWidth,
+                                        currentBgHeight: photo.bgHeight,
+                                        // 단추 정보 배열
+                                        buttons: []
+                                    };
+                                });
+                                
+                                console.log('=== 이미지 업로드 디버깅 ===');
+                                console.log('업로드 시간:', currentTime.toISOString());
+                                console.log('저장할 이미지 개수:', imagesToSave.length);
+                                console.log('첫 번째 이미지 노출 시간:', {
+                                    start: imagesToSave[0].display_start_at,
+                                    end: imagesToSave[0].display_end_at
+                                });
+                                
+                                // 기존 이미지 불러오기
+                                const existingImages = await loadImagesFromStorage();
+                                console.log('기존 이미지 개수:', existingImages.length);
+                                
+                                // 새 이미지 추가
+                                const updatedImages = [...existingImages, ...imagesToSave];
+                                await saveImagesToStorage(updatedImages);
+                                
+                                console.log('저장 완료. 총 이미지 개수:', updatedImages.length);
+                                
+                                // 업로드 완료 메시지
+                                const displayStart = new Date(imagesToSave[0].display_start_at);
+                                const displayEnd = new Date(imagesToSave[0].display_end_at);
+                                console.log('업로드 완료 - 노출 시간:', {
+                                    uploadTime: currentTime.toISOString(),
+                                    displayStart: displayStart.toISOString(),
+                                    displayEnd: displayEnd.toISOString()
+                                });
+                                alert(`${selectedPhotos.length}개의 이미지가 업로드되었습니다.\n노출 시간: ${displayStart.toLocaleString('ko-KR')} ~ ${displayEnd.toLocaleString('ko-KR')}`);
+                                
+                                // 선택 초기화
+                                selectedPhotos = [];
+                                countSpan.textContent = '0';
+                                selectedCount.style.display = 'none';
+                                photoUpload.value = '';
+                            }
+                        };
+                        
+                        img.src = compressedDataUrl; // 압축된 이미지 사용
+                    } catch (error) {
+                        console.error('이미지 처리 중 오류:', error);
+                        alert('이미지 처리 중 오류가 발생했습니다.');
+                    }
+                };
+                
+                reader.readAsDataURL(file);
+            }
+        });
+    });
+    
+    /**
+     * 노출 시간인지 확인
+     * 새로운 로직: 현재 시간이 06:00 ~ 12:00 사이인지 확인
+     */
+    function isInDisplayWindowTime(currentTime) {
+        // 현재 시간이 노출 윈도우(06:00 ~ 12:00) 내에 있는지 확인
+        const hour = currentTime.getHours();
+        return hour >= 6 && hour < 12;
+    }
+    
+    /**
+     * 보드 보기 버튼 활성화 상태 업데이트 (더 이상 비활성화하지 않음)
+     */
+    function updateViewBoardButton() {
+        // 버튼은 항상 활성화 상태로 유지
+        if (viewBoardBtn) {
+            viewBoardBtn.disabled = false;
+        }
+    }
+    
+    /**
+     * 팝업 이미지 표시
+     */
+    function showPopup() {
+        const popupOverlay = document.getElementById('popup-overlay');
+        if (popupOverlay) {
+            popupOverlay.style.display = 'flex';
+        }
+    }
+    
+    /**
+     * 팝업 이미지 닫기
+     */
+    function closePopup() {
+        const popupOverlay = document.getElementById('popup-overlay');
+        if (popupOverlay) {
+            popupOverlay.style.display = 'none';
+        }
+    }
+    
+    // 보드 보기 버튼 클릭 시
+    if (viewBoardBtn) {
+        viewBoardBtn.addEventListener('click', async function() {
+            const currentTime = getServerTime();
+            const canView = isInDisplayWindowTime(currentTime);
+            
+            if (!canView) {
+                // 노출 시간이 아니면 팝업 표시
+                showPopup();
+                return;
+            }
+            
+            console.log('보드 보기 버튼 클릭');
+            
+        // 기존 사진 제거
+        photoPreview.innerHTML = '';
+        
+            // 저장된 이미지 중 노출 가능한 것만 로드
+            await loadVisibleImages();
+        
+        // 갤러리 화면으로 이동
+        showScreen('gallery');
+    });
+    }
+    
+    // 팝업 닫기 버튼 클릭 시
+    const closePopupBtn = document.getElementById('close-popup-btn');
+    if (closePopupBtn) {
+        closePopupBtn.addEventListener('click', closePopup);
+    }
+    
+    // 팝업 오버레이 클릭 시 닫기
+    const popupOverlay = document.getElementById('popup-overlay');
+    if (popupOverlay) {
+        popupOverlay.addEventListener('click', function(e) {
+            if (e.target === popupOverlay) {
+                closePopup();
+            }
+        });
+    }
+    
+    // 사진들이 겹치는지 확인하는 함수 (패딩 포함)
+    function isOverlapping(newRect, existingRects, padding) {
+        for (let i = 0; i < existingRects.length; i++) {
+            const existing = existingRects[i];
+            // 패딩을 고려한 확장된 영역
+            const expandedNewRect = {
+                left: newRect.left - padding,
+                top: newRect.top - padding,
+                right: newRect.right + padding,
+                bottom: newRect.bottom + padding
+            };
+            const expandedExisting = {
+                left: existing.left - padding,
+                top: existing.top - padding,
+                right: existing.right + padding,
+                bottom: existing.bottom + padding
+            };
+            
+            // 두 확장된 사각형이 겹치는지 확인
+            if (!(expandedNewRect.right < expandedExisting.left || 
+                  expandedNewRect.left > expandedExisting.right || 
+                  expandedNewRect.bottom < expandedExisting.top || 
+                  expandedNewRect.top > expandedExisting.bottom)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    // 컬럼 기반 배치 함수: 한 컬럼에 최대 2개, 30px 간격, 첫 사진 y좌표 70-80px 랜덤
+    function findNextPosition(photo, containerWidth, containerHeight, existingRects, spacing, startX, startY) {
+        const maxImagesPerColumn = 2; // 한 컬럼에 최대 2개 이미지
+        const maxSpacing = 30; // 최대 간격 30px
+        const firstImageYMin = 70; // 첫 사진 y좌표 최소값
+        const firstImageYMax = 80; // 첫 사진 y좌표 최대값
+        
+        console.log('findNextPosition 호출:', {
+            photoBgWidth: photo.bgWidth,
+            photoBgHeight: photo.bgHeight,
+            containerWidth,
+            containerHeight,
+            existingRectsCount: existingRects.length,
+            spacing
+        });
+        
+        // 각 컬럼의 정보를 추적: { x: 컬럼 X 위치, images: [{top, bottom, height, width}], count: 이미지 개수, firstImageY: 첫 이미지 Y, maxWidth: 최대 너비 }
+        const columns = new Map();
+        
+        // 기존 사진들을 컬럼별로 분류
+        existingRects.forEach((rect, idx) => {
+            console.log(`기존 이미지 ${idx + 1}:`, { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom });
+            // 가장 가까운 컬럼 찾기 (기존 컬럼이 있는지 확인)
+            let matchedColumnX = null;
+            let minDistance = Infinity;
+            
+            columns.forEach((colData, colX) => {
+                const distance = Math.abs(rect.left - colX);
+                if (distance < 5 && distance < minDistance) { // 5px 이내면 같은 컬럼
+                    minDistance = distance;
+                    matchedColumnX = colX;
+                }
+            });
+            
+            // 매칭된 컬럼이 없으면 새 컬럼으로 간주 (첫 번째 이미지의 x 좌표를 컬럼 위치로)
+            if (matchedColumnX === null) {
+                matchedColumnX = rect.left;
+                const imageWidth = rect.right - rect.left;
+                columns.set(matchedColumnX, {
+                    images: [],
+                    count: 0,
+                    firstImageY: rect.top,
+                    maxWidth: imageWidth
+                });
+            }
+            
+            const colData = columns.get(matchedColumnX);
+            const imageWidth = rect.right - rect.left;
+            colData.images.push({
+                top: rect.top,
+                bottom: rect.bottom,
+                height: rect.bottom - rect.top,
+                width: imageWidth
+            });
+            colData.count++;
+            // 컬럼의 최대 너비 업데이트
+            if (imageWidth > colData.maxWidth) {
+                colData.maxWidth = imageWidth;
+            }
+        });
+        
+        // 기존 컬럼들 정렬 (Y 좌표 기준으로 오름차순 정렬)
+        columns.forEach((colData, colX) => {
+            colData.images.sort((a, b) => a.top - b.top);
+        });
+        
+        // 왼쪽부터 순차적으로 배치 가능한 컬럼 찾기
+        let currentX = startX || spacing;
+        let bestPosition = null;
+        let bestColumnX = null;
+        
+        // 먼저 기존 컬럼에서 배치 가능한 곳 찾기
+        for (let colX of Array.from(columns.keys()).sort((a, b) => a - b)) {
+            const colData = columns.get(colX);
+            
+            // 한 컬럼에 이미 2개 이상 있으면 건너뛰기
+            if (colData.count >= maxImagesPerColumn) {
+                continue;
+            }
+            
+            // 현재 컬럼에서 배치할 위치 찾기
+            let newY;
+            
+            if (colData.count === 0) {
+                // 빈 컬럼: 첫 이미지 Y 좌표 랜덤 (70-80px)
+                newY = firstImageYMin + Math.random() * (firstImageYMax - firstImageYMin);
+            } else if (colData.count === 1) {
+                // 이미 1개 있는 컬럼: 아래에 배치 (간격 최대 30px)
+                const lastImage = colData.images[colData.images.length - 1];
+                newY = lastImage.bottom + spacing; // 최소 간격
+                // 간격을 최대 30px까지 조정
+                if (newY - lastImage.bottom > maxSpacing) {
+                    newY = lastImage.bottom + maxSpacing;
+                }
+            } else {
+                continue; // 이미 2개 있으면 건너뛰기
+            }
+            
+            // 화면 밖으로 나가는지 확인
+            if (newY + photo.bgHeight > containerHeight) {
+                // 화면 밖으로 나가면 다음 컬럼으로
+                continue;
+            }
+            
+            // 겹치는지 확인
+            const newRect = {
+                left: colX,
+                top: newY,
+                right: colX + photo.bgWidth,
+                bottom: newY + photo.bgHeight
+            };
+            
+            if (!isOverlapping(newRect, existingRects, spacing)) {
+                bestPosition = { x: colX, y: newY };
+                bestColumnX = colX;
+                break; // 첫 번째 가능한 위치를 선택
+            }
+        }
+        
+        // 기존 컬럼에서 배치할 수 없으면 새 컬럼 생성
+        if (bestPosition === null) {
+            // 새로운 컬럼의 X 위치 찾기 (가장 오른쪽 컬럼 기준)
+            if (columns.size > 0) {
+                const sortedColumns = Array.from(columns.keys()).sort((a, b) => a - b);
+                const lastColumnX = sortedColumns[sortedColumns.length - 1];
+                
+                // 마지막 컬럼의 실제 너비 가져오기
+                const lastColData = columns.get(lastColumnX);
+                const maxColumnWidth = lastColData ? lastColData.maxWidth : photo.bgWidth;
+                
+                // 새 컬럼 위치 = 마지막 컬럼 위치 + 마지막 컬럼 너비 + 간격
+                currentX = lastColumnX + maxColumnWidth + spacing;
+            } else {
+                currentX = spacing;
+            }
+            
+            // 컬럼이 화면 밖으로 나가는지 확인
+            if (currentX + photo.bgWidth > containerWidth) {
+                // 화면 밖이면 강제로 첫 컬럼에 배치 (이론적으로는 발생하지 않아야 함)
+                currentX = spacing;
+            }
+            
+            // 첫 이미지 Y 좌표 랜덤 (70-80px)
+            const newY = firstImageYMin + Math.random() * (firstImageYMax - firstImageYMin);
+            
+            // 화면 밖으로 나가는지 확인
+            if (newY + photo.bgHeight <= containerHeight) {
+                const newRect = {
+                    left: currentX,
+                    top: newY,
+                    right: currentX + photo.bgWidth,
+                    bottom: newY + photo.bgHeight
+                };
+                
+                if (!isOverlapping(newRect, existingRects, spacing)) {
+                    bestPosition = { x: currentX, y: newY };
+                }
+            }
+        }
+        
+        // 여전히 배치할 수 없으면 첫 번째 컬럼에 강제 배치
+        if (bestPosition === null) {
+            bestPosition = { 
+                x: spacing, 
+                y: firstImageYMin + Math.random() * (firstImageYMax - firstImageYMin) 
+            };
+            console.log('강제 배치 사용:', bestPosition);
+        }
+        
+        console.log('findNextPosition 결과:', bestPosition);
+        return bestPosition;
+    }
+    
+    // 모든 wrapper 요소들을 추적하는 배열
+    let allWrappers = [];
+    
+    // 사진들이 겹치는지 확인하는 함수 (실제 wrapper 요소 사용)
+    function checkOverlapWithOthers(currentWrapper, newWidth, newHeight, newX, newY) {
+        const padding = 10;
+        const newRect = {
+            left: newX - padding,
+            top: newY - padding,
+            right: newX + newWidth + padding,
+            bottom: newY + newHeight + padding
+        };
+        
+        for (let i = 0; i < allWrappers.length; i++) {
+            const otherWrapper = allWrappers[i];
+            if (otherWrapper === currentWrapper) continue;
+            
+            const otherRect = {
+                left: parseFloat(otherWrapper.style.left) - padding,
+                top: parseFloat(otherWrapper.style.top) - padding,
+                right: parseFloat(otherWrapper.style.left) + parseFloat(otherWrapper.style.width) + padding,
+                bottom: parseFloat(otherWrapper.style.top) + parseFloat(otherWrapper.style.height) + padding
+            };
+            
+            // 두 사각형이 겹치는지 확인
+            if (!(newRect.right < otherRect.left || 
+                  newRect.left > otherRect.right || 
+                  newRect.bottom < otherRect.top || 
+                  newRect.top > otherRect.bottom)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * 이미지 상태 저장 함수
+     */
+    async function saveImageState(imageId, state) {
+        const allImages = await loadImagesFromStorage();
+        const imageIndex = allImages.findIndex(img => img.id === imageId);
+        if (imageIndex !== -1) {
+            allImages[imageIndex] = { ...allImages[imageIndex], ...state };
+            await saveImagesToStorage(allImages);
+        }
+    }
+    
+    /**
+     * 고유 ID 생성
+     */
+    function generateImageId() {
+        return 'img_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+    
+    // 사진들을 랜덤으로 겹치지 않게 배치하는 함수
+    async function placePhotos() {
+        console.log('=== placePhotos 함수 실행 ===');
+        console.log('selectedPhotos 개수:', selectedPhotos.length);
+        
+        if (selectedPhotos.length === 0) {
+            console.error('selectedPhotos가 비어있습니다!');
+            return;
+        }
+        
+        // 기존 사진 제거
+        photoPreview.innerHTML = '';
+        
+        const frameWidth = mobileFrame ? mobileFrame.offsetWidth - 40 : window.innerWidth - 40;
+        const spacing = 30; // 이미지 간격 30px
+        const startTop = 0; // 상단 여백
+        // 보드 높이는 화면 높이로 고정
+        const containerHeight = window.innerHeight; // 화면 높이
+        const containerWidth = frameWidth; // 초기 가로 너비
+        
+        let existingRects = []; // 배치된 사진들의 위치 정보
+        let maxRight = spacing;
+        let maxBottom = startTop; // 헤더 높이만큼 여백
+        allWrappers = []; // wrapper 배열 초기화
+        
+        // 모든 이미지에 ID가 있는지 확인하고 없으면 추가
+        const allImages = await loadImagesFromStorage();
+        let needsSave = false;
+        allImages.forEach(img => {
+            if (!img.id) {
+                img.id = generateImageId();
+                needsSave = true;
+            }
+        });
+        if (needsSave) {
+            await saveImagesToStorage(allImages);
+            // ID가 추가되었으므로 다시 로드
+            const currentTime = getServerTime();
+            selectedPhotos = filterVisibleImages(allImages, currentTime);
+        }
+        
+        console.log('배치할 이미지 개수:', selectedPhotos.length);
+        console.log('existingRects 초기값:', existingRects);
+        
+        // 디버깅: 각 이미지의 저장된 위치 정보 확인
+        selectedPhotos.forEach((photo, idx) => {
+            console.log(`이미지 ${idx + 1} 저장된 위치:`, photo.position);
+        });
+        
+        selectedPhotos.forEach(function(photo, index) {
+            console.log(`이미지 ${index + 1} 배치 시작:`, {
+                id: photo.id,
+                src: photo.src ? '있음' : '없음',
+                bgWidth: photo.bgWidth,
+                bgHeight: photo.bgHeight
+            });
+            // 저장된 위치 정보가 있으면 사용, 없으면 새로 계산
+            let finalX, finalY;
+            
+            // 저장된 크기 정보 먼저 가져오기 (위치 계산에 필요)
+            const savedBgWidth = photo.currentBgWidth || photo.bgWidth;
+            const savedBgHeight = photo.currentBgHeight || photo.bgHeight;
+            
+            // 저장된 위치가 있고, 겹치지 않으면 사용
+            if (photo.position && photo.position.x !== null && photo.position.y !== null) {
+                const savedRect = {
+                    left: photo.position.x,
+                    top: photo.position.y,
+                    right: photo.position.x + savedBgWidth,
+                    bottom: photo.position.y + savedBgHeight
+                };
+                
+                // 저장된 위치가 겹치지 않고 화면 내에 있는지 확인
+                if (!isOverlapping(savedRect, existingRects, spacing) &&
+                    savedRect.right <= containerWidth &&
+                    savedRect.bottom <= containerHeight) {
+                    // 저장된 위치 사용
+                    finalX = photo.position.x;
+                    finalY = photo.position.y;
+                    console.log(`이미지 ${index + 1}: 저장된 위치 사용 (${finalX}, ${finalY})`);
+                } else {
+                    // 저장된 위치가 유효하지 않으면 새로 계산
+                    console.log(`이미지 ${index + 1}: 저장된 위치 무효, 새로 계산`);
+                    const position = findNextPosition(
+                        photo, 
+                        containerWidth, 
+                        containerHeight,
+                        existingRects, 
+                        spacing, // 간격 30px
+                        spacing, // 시작 X 위치
+                        0  // 시작 Y 위치 (함수 내에서 70-80px로 조정됨)
+                    );
+                    finalX = position.x;
+                    finalY = position.y;
+                    
+                    // 새로운 위치 정보 저장
+                    if (photo.id) {
+                        (async () => {
+                            await saveImageState(photo.id, {
+                                position: { x: finalX, y: finalY }
+                            });
+                        })();
+                        photo.position = { x: finalX, y: finalY };
+                    }
+                }
+            } else {
+                // 저장된 위치가 없으면 새로 계산
+                console.log(`이미지 ${index + 1}: 위치 새로 계산`);
+                const position = findNextPosition(
+                    photo, 
+                    containerWidth, 
+                    containerHeight,
+                    existingRects, 
+                    spacing, // 간격 30px
+                    spacing, // 시작 X 위치
+                    0  // 시작 Y 위치 (함수 내에서 70-80px로 조정됨)
+                );
+                finalX = position.x;
+                finalY = position.y; // 함수에서 이미 70-80px로 설정됨
+                
+                // 위치 정보 저장
+                if (photo.id) {
+                    (async () => {
+                        await saveImageState(photo.id, {
+                            position: { x: finalX, y: finalY }
+                        });
+                    })();
+                    photo.position = { x: finalX, y: finalY };
+                }
+            }
+            
+            // 저장된 크기 정보가 있으면 사용, 없으면 원본 크기 사용 (이미 위에서 가져왔음)
+            const savedImgWidth = photo.currentWidth || photo.imgWidth;
+            const savedImgHeight = photo.currentHeight || photo.imgHeight;
+            const savedPadding = photo.currentPadding || photo.padding;
+            
+            // 래퍼 생성
+            const wrapper = document.createElement('div');
+            wrapper.className = 'photo-wrapper';
+            wrapper.style.width = savedBgWidth + 'px';
+            wrapper.style.height = savedBgHeight + 'px';
+            wrapper.style.left = finalX + 'px';
+            wrapper.style.top = finalY + 'px';
+            
+            // wrapper를 배열에 추가
+            allWrappers.push(wrapper);
+            
+            // 배경 div 생성
+            const background = document.createElement('div');
+            background.className = 'photo-background';
+            background.style.width = savedBgWidth + 'px';
+            background.style.height = savedBgHeight + 'px';
+            
+            // 사진배경 폴더의 이미지를 랜덤으로 선택
+            const backgroundImages = [
+                '사진배경/사진배경1.png',
+                '사진배경/사진배경2.png',
+                '사진배경/사진배경3.png',
+                '사진배경/사진배경4.png',
+                '사진배경/사진배경5.png'
+            ];
+            const randomBackgroundImage = backgroundImages[Math.floor(Math.random() * backgroundImages.length)];
+            background.style.backgroundImage = `url('${randomBackgroundImage}')`;
+            
+            // 배경 클릭 시 이벤트 전파 방지
+            background.addEventListener('click', function(e) {
+                e.stopPropagation();
+                e.preventDefault();
+            });
+            
+            // 이미지 생성
+            const photoImg = document.createElement('img');
+            photoImg.className = 'photo-image';
+            photoImg.src = photo.src;
+            photoImg.style.width = savedImgWidth + 'px';
+            photoImg.style.height = savedImgHeight + 'px';
+            photoImg.style.top = savedPadding + 'px';
+            photoImg.style.left = savedPadding + 'px';
+            
+            // 반응 관련 데이터 초기화 (저장된 정보가 있으면 사용)
+            let reactionCount = photo.reactionCount || 0;
+            let currentWidth = savedImgWidth;
+            let currentHeight = savedImgHeight;
+            let currentPadding = savedPadding;
+            const originalWidth = photo.imgWidth; // 원본 크기는 항상 유지
+            const originalHeight = photo.imgHeight;
+            const originalPadding = photo.padding;
+            
+            // 저장된 단추들 복원
+            if (photo.buttons && photo.buttons.length > 0) {
+                photo.buttons.forEach(buttonData => {
+                    const buttonImg = document.createElement('img');
+                    buttonImg.src = buttonData.src;
+                    buttonImg.className = 'reaction-button';
+                    buttonImg.style.position = 'absolute';
+                    buttonImg.style.width = buttonData.width + 'px';
+                    buttonImg.style.height = buttonData.height + 'px';
+                    buttonImg.style.left = buttonData.left + 'px';
+                    buttonImg.style.top = buttonData.top + 'px';
+                    buttonImg.style.zIndex = '1000';
+                    buttonImg.style.pointerEvents = 'none';
+                    buttonImg.style.transform = buttonData.transform || 'rotate(0deg)';
+                    buttonImg.style.opacity = '1';
+                    wrapper.appendChild(buttonImg);
+                });
+            }
+            
+            // 단추 반응 이미지 배열
+            const buttonImages = ['단추반응/단추1.png', '단추반응/단추2.png', '단추반응/단추3.png'];
+            
+            // 이미지 클릭 이벤트 - 반응 추가
+            photoImg.addEventListener('click', function(e) {
+                e.stopPropagation();
+                
+                // 반응 횟수 증가
+                reactionCount++;
+                
+                // 단추 이미지 랜덤 선택
+                const randomButtonImage = buttonImages[Math.floor(Math.random() * buttonImages.length)];
+                
+                // 단추 이미지 생성
+                const buttonImg = document.createElement('img');
+                buttonImg.src = randomButtonImage;
+                buttonImg.className = 'reaction-button';
+                
+                // 이미지 외곽 부분에 랜덤 위치 배치
+                // wrapper 내부에서 이미지 주변 영역 계산
+                const margin = 15; // 외곽 여백
+                const buttonSize = 25 + Math.random() * 20; // 25-45px 크기
+                
+                // 외곽 영역: 이미지의 패딩 영역과 배경의 경계 영역
+                // 랜덤 위치 생성 (이미지 외곽 부분)
+                let randomX, randomY;
+                const side = Math.floor(Math.random() * 4); // 0: 위, 1: 오른쪽, 2: 아래, 3: 왼쪽
+                
+                if (side === 0) { // 위쪽
+                    randomX = currentPadding + Math.random() * (currentWidth - buttonSize);
+                    randomY = -margin + Math.random() * margin;
+                } else if (side === 1) { // 오른쪽
+                    randomX = currentPadding + currentWidth + Math.random() * margin;
+                    randomY = currentPadding + Math.random() * (currentHeight - buttonSize);
+                } else if (side === 2) { // 아래쪽
+                    randomX = currentPadding + Math.random() * (currentWidth - buttonSize);
+                    randomY = currentPadding + currentHeight + Math.random() * margin;
+                } else { // 왼쪽
+                    randomX = -margin + Math.random() * margin;
+                    randomY = currentPadding + Math.random() * (currentHeight - buttonSize);
+                }
+                
+                // 단추 회전 각도
+                const rotation = Math.random() * 360;
+                
+                // 단추 이미지 스타일 설정
+                buttonImg.style.position = 'absolute';
+                buttonImg.style.width = buttonSize + 'px';
+                buttonImg.style.height = buttonSize + 'px';
+                buttonImg.style.left = randomX + 'px';
+                buttonImg.style.top = randomY + 'px';
+                buttonImg.style.zIndex = '1000';
+                buttonImg.style.pointerEvents = 'none';
+                buttonImg.style.transform = 'rotate(' + rotation + 'deg)';
+                
+                // 애니메이션 효과
+                buttonImg.style.opacity = '0';
+                buttonImg.style.transition = 'opacity 0.3s ease';
+                
+                wrapper.appendChild(buttonImg);
+                
+                // 페이드인 효과
+                setTimeout(() => {
+                    buttonImg.style.opacity = '1';
+                }, 10);
+                
+                // 단추 정보 저장
+                if (photo.id) {
+                    (async () => {
+                        const allImages = await loadImagesFromStorage();
+                        const imageIndex = allImages.findIndex(img => img.id === photo.id);
+                        if (imageIndex !== -1) {
+                            if (!allImages[imageIndex].buttons) {
+                                allImages[imageIndex].buttons = [];
+                            }
+                            allImages[imageIndex].buttons.push({
+                                src: randomButtonImage,
+                                width: buttonSize,
+                                height: buttonSize,
+                                left: randomX,
+                                top: randomY,
+                                transform: 'rotate(' + rotation + 'deg)'
+                            });
+                            await saveImagesToStorage(allImages);
+                        }
+                    })();
+                }
+                
+                // 이미지 크기 증가 (5번 클릭 단위로 5% 증가, 최대 50%까지)
+                // 5번 클릭마다 5% 증가하므로, reactionCount를 5로 나눈 몫에 0.05를 곱함
+                const growthLevel = Math.floor(reactionCount / 5); // 5번 단위로 증가 레벨 계산
+                const maxGrowthLevel = 10; // 최대 50% 증가 (10 * 5% = 50%)
+                const actualGrowthLevel = Math.min(growthLevel, maxGrowthLevel); // 최대 제한 적용
+                const scaleFactor = 1 + (actualGrowthLevel * 0.05); // 최대 1.5 (50% 증가)
+                
+                let newWidth = originalWidth * scaleFactor;
+                let newHeight = originalHeight * scaleFactor;
+                let newPadding = originalPadding * scaleFactor;
+                
+                // 배경 크기도 함께 증가
+                const bgScaleFactor = scaleFactor;
+                let newBgWidth = photo.bgWidth * bgScaleFactor;
+                let newBgHeight = photo.bgHeight * bgScaleFactor;
+                
+                // 이전 growthLevel 계산 (크기가 실제로 증가하는지 확인)
+                const previousGrowthLevel = Math.floor((reactionCount - 1) / 5);
+                const previousActualGrowthLevel = Math.min(previousGrowthLevel, maxGrowthLevel);
+                const shouldGrow = actualGrowthLevel > previousActualGrowthLevel; // 5번 단위로 증가할 때만 true
+                
+                // 현재 wrapper의 위치
+                const currentX = parseFloat(wrapper.style.left);
+                const currentY = parseFloat(wrapper.style.top);
+                
+                // 5번 단위로 증가할 때만 크기 변경 시도
+                if (shouldGrow) {
+                    // 다른 이미지들과 겹치는지 확인
+                    let canGrow = !checkOverlapWithOthers(wrapper, newBgWidth, newBgHeight, currentX, currentY);
+                    
+                    // 겹치지 않을 때만 크기 증가
+                    if (canGrow) {
+                        // 현재 크기 업데이트
+                        currentWidth = newWidth;
+                        currentHeight = newHeight;
+                        currentPadding = newPadding;
+                        
+                        // 크기 업데이트 (애니메이션 효과)
+                        photoImg.style.transition = 'all 0.3s ease';
+                        photoImg.style.width = newWidth + 'px';
+                        photoImg.style.height = newHeight + 'px';
+                        photoImg.style.top = newPadding + 'px';
+                        photoImg.style.left = newPadding + 'px';
+                        
+                        wrapper.style.transition = 'all 0.3s ease';
+                        wrapper.style.width = newBgWidth + 'px';
+                        wrapper.style.height = newBgHeight + 'px';
+                        background.style.transition = 'all 0.3s ease';
+                        background.style.width = newBgWidth + 'px';
+                        background.style.height = newBgHeight + 'px';
+                        
+                        // 크기 정보 저장
+                        if (photo.id) {
+                            (async () => {
+                                await saveImageState(photo.id, {
+                                    currentWidth: newWidth,
+                                    currentHeight: newHeight,
+                                    currentPadding: newPadding,
+                                    currentBgWidth: newBgWidth,
+                                    currentBgHeight: newBgHeight,
+                                    reactionCount: reactionCount
+                                });
+                            })();
+                        }
+                    } else {
+                        // 겹치면 반응 횟수 되돌림 (크기 증가 없이 단추만 추가)
+                        reactionCount--;
+                    }
+                } else {
+                    // 크기가 증가하지 않아도 반응 횟수는 저장
+                    if (photo.id) {
+                        (async () => {
+                            await saveImageState(photo.id, {
+                                reactionCount: reactionCount
+                            });
+                        })();
+                    }
+                }
+                
+                // 클릭 가능하도록 설정
+                photoImg.style.cursor = 'pointer';
+            });
+            
+            // 요소 조립
+            wrapper.appendChild(background);
+            wrapper.appendChild(photoImg);
+            photoPreview.appendChild(wrapper);
+            
+            console.log(`이미지 ${index + 1} DOM 추가 완료:`, {
+                id: photo.id,
+                wrapper: wrapper,
+                position: { x: finalX, y: finalY },
+                size: { width: savedBgWidth, height: savedBgHeight },
+                src: photo.src ? '있음' : '없음'
+            });
+            
+            // 배치된 사진 정보 저장 (저장된 크기 사용)
+            existingRects.push({
+                left: finalX,
+                top: finalY,
+                right: finalX + savedBgWidth,
+                bottom: finalY + savedBgHeight
+            });
+            
+            // 최대 너비/높이 업데이트
+            maxRight = Math.max(maxRight, finalX + savedBgWidth + spacing);
+            maxBottom = Math.max(maxBottom, finalY + savedBgHeight);
+        });
+        
+        // preview 영역 크기 업데이트
+        // 가로: 콘텐츠가 끝나는 지점까지, 세로: 화면 높이로 고정 (스크롤 없음)
+        const finalWidth = Math.max(frameWidth, maxRight + spacing);
+        const fixedHeight = window.innerHeight; // 화면 높이로 고정
+        
+        console.log('크기 계산:', {
+            frameWidth: frameWidth,
+            maxRight: maxRight,
+            maxBottom: maxBottom,
+            spacing: spacing,
+            finalWidth: finalWidth,
+            fixedHeight: fixedHeight
+        });
+        
+        photoPreview.style.width = finalWidth + 'px';
+        photoPreview.style.height = fixedHeight + 'px'; // 화면 높이로 고정
+        photoPreview.style.maxHeight = fixedHeight + 'px'; // 최대 높이도 화면 높이로 고정
+        
+        console.log('모든 이미지 배치 완료. DOM 요소 개수:', photoPreview.children.length);
+        console.log('photoPreview 크기 (설정 후):', {
+            width: photoPreview.style.width,
+            height: photoPreview.style.height,
+            maxHeight: photoPreview.style.maxHeight,
+            computedWidth: window.getComputedStyle(photoPreview).width,
+            computedHeight: window.getComputedStyle(photoPreview).height,
+            offsetWidth: photoPreview.offsetWidth,
+            offsetHeight: photoPreview.offsetHeight
+        });
+    }
+});
+
