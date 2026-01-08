@@ -307,33 +307,43 @@ App.initUpload = function() {
         });
     });
     
-    // 보드 보기 버튼 클릭 시
-    if (viewBoardBtn) {
-        viewBoardBtn.addEventListener('click', async function() {
-            const currentTime = App.getServerTime();
-            const canView = App.isInDisplayWindowTime(currentTime);
-            
-            if (!canView) {
-                // 노출 시간이 아니면 팝업 표시 (팝업.png 사용)
-                App.showPopup('팝업.png');
-                return;
-            }
-            
-            // 기존 사진 제거
-            const { photoPreview } = App.elements;
-            if (photoPreview) {
-                photoPreview.innerHTML = '';
-            }
-            
-            // 저장된 이미지 중 노출 가능한 것만 로드
-            if (typeof App.loadVisibleImages === 'function') {
-                await App.loadVisibleImages();
-            } else if (typeof App.apiGetImages === 'function') {
-                // 대안: 직접 이미지 로드 시도
-                const allImages = await App.apiGetImages();
+    // 보드 보기 버튼 클릭 시 (직접 찾기)
+    const viewBoardBtnEl = document.getElementById('view-board-btn');
+    if (viewBoardBtnEl) {
+        // 기존 이벤트 리스너 제거 후 새로 추가 (중복 방지)
+        const newViewBoardBtn = viewBoardBtnEl.cloneNode(true);
+        viewBoardBtnEl.parentNode.replaceChild(newViewBoardBtn, viewBoardBtnEl);
+        const freshViewBoardBtn = document.getElementById('view-board-btn');
+        
+        if (freshViewBoardBtn) {
+            freshViewBoardBtn.addEventListener('click', async function(e) {
+                e.preventDefault();
+                e.stopPropagation();
                 
-                // 현재 시간 기준으로 노출 가능한 이미지 필터링
                 const currentTime = App.getServerTime();
+                const canView = App.isInDisplayWindowTime(currentTime);
+                
+                if (!canView) {
+                    // 노출 시간이 아니면 팝업 표시 (팝업.png 사용)
+                    App.showPopup('팝업.png');
+                    return;
+                }
+                
+                // 기존 사진 제거
+                const { photoPreview } = App.elements;
+                if (photoPreview) {
+                    photoPreview.innerHTML = '';
+                }
+                
+                // 저장된 이미지 중 노출 가능한 것만 로드
+                if (typeof App.loadVisibleImages === 'function') {
+                    await App.loadVisibleImages();
+                } else if (typeof App.apiGetImages === 'function') {
+                    // 대안: 직접 이미지 로드 시도
+                    const allImages = await App.apiGetImages();
+                    
+                    // 현재 시간 기준으로 노출 가능한 이미지 필터링
+                    const currentTime = App.getServerTime();
                     
                     // filterVisibleImages 함수가 있으면 사용, 없으면 직접 필터링
                     let visibleImages = [];
@@ -349,16 +359,11 @@ App.initUpload = function() {
                         });
                     }
                     
-                    console.log('노출 가능한 이미지 개수:', visibleImages.length);
-                    
                     if (visibleImages.length > 0) {
                         App.selectedPhotos = visibleImages;
-                        console.log('placePhotos 함수 존재 여부:', typeof App.placePhotos === 'function');
                         if (typeof App.placePhotos === 'function') {
-                            console.log('placePhotos 직접 호출');
                             await App.placePhotos();
                         } else {
-                            console.error('placePhotos 함수가 없습니다!');
                             // 최소한 이미지 데이터는 표시
                             const { photoPreview } = App.elements;
                             if (photoPreview) {
@@ -366,18 +371,17 @@ App.initUpload = function() {
                             }
                         }
                     } else {
-                        console.log('노출 가능한 이미지가 없습니다.');
                         const { photoPreview } = App.elements;
                         if (photoPreview) {
                             photoPreview.innerHTML = '<div style="padding: 20px; color: white;">현재 시간에 노출 가능한 이미지가 없습니다.</div>';
                         }
                     }
                 }
-            }
-            
-            // 갤러리 화면으로 이동
-            App.showScreen('gallery');
-        });
+                
+                // 갤러리 화면으로 이동
+                App.showScreen('gallery');
+            });
+        }
     }
     
     // 팝업 닫기 버튼 클릭 시
@@ -645,12 +649,9 @@ App.setupGoToPhotoUploadButton = function() {
     freshBtn.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
-        console.log('사진 올리기 버튼 클릭됨');
         // 사진 업로드 페이지로 이동
         App.showScreen('photo-upload');
     });
-    
-    console.log('사진 올리기 버튼 이벤트 리스너 설정 완료');
 };
 
 /**
