@@ -162,15 +162,6 @@ App.initUpload = function() {
                             const bgWidth = imgWidth * 1.05;
                             const bgHeight = imgHeight * 1.05;
                             
-                            console.log('배경 크기 계산 (1.05배):', {
-                                imgWidth: imgWidth,
-                                imgHeight: imgHeight,
-                                bgWidth: bgWidth,
-                                bgHeight: bgHeight,
-                                widthRatio: (bgWidth / imgWidth).toFixed(3),
-                                heightRatio: (bgHeight / imgHeight).toFixed(3)
-                            });
-                            
                             // 1차 축소: 모바일 화면에 맞게 축소
                             const widthScale = frameWidth / bgWidth;
                             const firstScale = Math.min(widthScale, 1);
@@ -215,9 +206,6 @@ App.initUpload = function() {
                                 
                                 // API를 통해 서버에 업로드
                                 try {
-                                    console.log('업로드 시작. 이미지 개수:', App.selectedPhotos.length);
-                                    console.log('현재 시간:', currentTime.toISOString());
-                                    
                                     // addDisplayWindowToImage 함수 확인
                                     if (typeof addDisplayWindowToImage !== 'function') {
                                         throw new Error('addDisplayWindowToImage 함수를 찾을 수 없습니다.');
@@ -230,19 +218,8 @@ App.initUpload = function() {
                                     }
                                     
                                     const uploadPromises = App.selectedPhotos.map(async (photo, index) => {
-                                        console.log(`이미지 ${index + 1} 업로드 시작:`, {
-                                            hasSrc: !!photo.src,
-                                            imgWidth: photo.imgWidth,
-                                            imgHeight: photo.imgHeight,
-                                            scale: photo.scale
-                                        });
-                                        
                                         try {
                                             const imageWithWindow = addDisplayWindowToImage(photo, currentTime);
-                                            console.log(`이미지 ${index + 1} 노출 시간:`, {
-                                                display_start_at: imageWithWindow.display_start_at,
-                                                display_end_at: imageWithWindow.display_end_at
-                                            });
                                             
                                             const imageData = {
                                                 width: Math.round(photo.imgWidth),
@@ -254,7 +231,6 @@ App.initUpload = function() {
                                             };
                                             
                                             const result = await App.apiUploadImage(photo.src, imageData);
-                                            console.log(`이미지 ${index + 1} 업로드 성공:`, result);
                                             return result;
                                         } catch (err) {
                                             console.error(`이미지 ${index + 1} 업로드 실패:`, err);
@@ -343,39 +319,21 @@ App.initUpload = function() {
                 return;
             }
             
-            console.log('보드 보기 버튼 클릭');
-            
             // 기존 사진 제거
             const { photoPreview } = App.elements;
             if (photoPreview) {
                 photoPreview.innerHTML = '';
-                console.log('기존 사진 제거 완료');
-            } else {
-                console.error('photoPreview 요소를 찾을 수 없습니다!');
             }
             
             // 저장된 이미지 중 노출 가능한 것만 로드
-            console.log('App 객체:', App);
-            console.log('App.loadVisibleImages 함수 존재 여부:', !!App.loadVisibleImages);
-            console.log('App 객체의 모든 속성:', Object.keys(App));
-            
-            // loadVisibleImages가 없으면 직접 호출 시도
             if (typeof App.loadVisibleImages === 'function') {
-                console.log('loadVisibleImages 호출 시작');
                 await App.loadVisibleImages();
-                console.log('loadVisibleImages 호출 완료');
-            } else {
-                console.error('loadVisibleImages 함수가 없습니다!');
-                console.error('App 객체 상태:', App);
+            } else if (typeof App.apiGetImages === 'function') {
                 // 대안: 직접 이미지 로드 시도
-                if (typeof App.apiGetImages === 'function') {
-                    console.log('apiGetImages를 직접 호출 시도');
-                    const allImages = await App.apiGetImages();
-                    console.log('로드된 이미지 개수:', allImages.length);
-                    
-                    // 현재 시간 기준으로 노출 가능한 이미지 필터링
-                    const currentTime = App.getServerTime();
-                    console.log('현재 시간:', currentTime.toISOString());
+                const allImages = await App.apiGetImages();
+                
+                // 현재 시간 기준으로 노출 가능한 이미지 필터링
+                const currentTime = App.getServerTime();
                     
                     // filterVisibleImages 함수가 있으면 사용, 없으면 직접 필터링
                     let visibleImages = [];
@@ -512,70 +470,22 @@ App.loadTodayUploadedPhotos = async function() {
         // 현재 시간
         const currentTime = App.getServerTime();
         
-        console.log('=== loadTodayUploadedPhotos 시작 ===');
-        console.log('현재 시간:', currentTime.toISOString(), '로컬:', currentTime.toLocaleString('ko-KR'));
-        
-        // 모든 이미지 가져오기 - 직접 fetch로 디버깅
+        // 모든 이미지 가져오기
         let allImages = [];
         try {
-            console.log('=== apiGetImages 호출 전 ===');
-            console.log('API_BASE_URL:', App.API_BASE_URL);
-            
-            // 직접 API 호출해서 응답 확인
             const token = localStorage.getItem('auth_token');
-            console.log('토큰 존재:', !!token);
             
             // 토큰이 없으면 경고
             if (!token) {
-                console.warn('⚠️ 인증 토큰이 없습니다. 로그인이 필요합니다.');
-                alert('이미지 목록을 조회하려면 로그인이 필요합니다.');
                 if (emptyPlaceholder) {
                     emptyPlaceholder.style.display = 'block';
                 }
                 return;
             }
-            if (token) {
-                console.log('토큰 앞 20자:', token.substring(0, 20));
-            }
             
-            const directResponse = await fetch(`${App.API_BASE_URL}/api/images`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            console.log('=== 직접 fetch 응답 ===');
-            console.log('상태 코드:', directResponse.status, directResponse.statusText);
-            console.log('응답 OK:', directResponse.ok);
-            
-            if (!directResponse.ok) {
-                const errorText = await directResponse.text();
-                console.error('에러 응답:', errorText);
-                throw new Error(`API 호출 실패: ${directResponse.status} ${errorText}`);
-            }
-            
-            const directResult = await directResponse.json();
-            console.log('=== 직접 fetch 응답 본문 ===');
-            console.log('응답 전체:', directResult);
-            console.log('images 타입:', typeof directResult.images);
-            console.log('images 배열 여부:', Array.isArray(directResult.images));
-            console.log('images 개수:', directResult.images ? directResult.images.length : 0);
-            
-            if (directResult.images && directResult.images.length > 0) {
-                console.log('첫 번째 이미지:', directResult.images[0]);
-            }
-            
-            // apiGetImages 함수 사용
             allImages = await App.apiGetImages();
-            console.log('=== 업로드 페이지 사진 필터링 디버그 ===');
-            console.log('전체 이미지 수:', allImages.length);
         } catch (error) {
-            console.error('=== 이미지 목록 조회 실패 ===');
-            console.error('에러 메시지:', error.message);
-            console.error('에러 전체:', error);
-            alert('이미지 목록을 가져오는 중 오류가 발생했습니다: ' + error.message);
+            console.error('이미지 목록 조회 실패:', error);
             // 에러 발생 시 빈 사진 placeholder 표시
             if (emptyPlaceholder) {
                 emptyPlaceholder.style.display = 'block';
@@ -585,36 +495,25 @@ App.loadTodayUploadedPhotos = async function() {
         
         // 현재 사용자 ID 가져오기
         const currentUser = App.getCurrentUser();
-        console.log('=== 업로드 페이지 사용자 필터링 ===');
-        console.log('현재 사용자:', currentUser);
+        if (!currentUser) {
+            if (emptyPlaceholder) {
+                emptyPlaceholder.style.display = 'block';
+            }
+            return;
+        }
         
         // 자신이 업로드한 사진만 필터링 + display_end_at이 아직 지나지 않은 사진만 표시
-        // 사진보기 페이지에서 노출이 끝나면 업로드 페이지에서도 안 보임
         const windowImages = allImages.filter(img => {
             // 1. 자신이 업로드한 사진인지 확인
             const isMyImage = img.user_id && String(img.user_id) === String(currentUser);
             if (!isMyImage) {
-                console.log('다른 사용자의 이미지 제외:', {
-                    id: img.id,
-                    image_user_id: img.user_id,
-                    current_user: currentUser
-                });
                 return false;
             }
             
             // 2. display_end_at이 아직 지나지 않은 사진인지 확인
             if (img.display_end_at) {
                 const displayEnd = new Date(img.display_end_at);
-                const isVisible = currentTime < displayEnd;
-                console.log('내 이미지 필터링:', {
-                    id: img.id,
-                    uploaded_at: img.uploaded_at,
-                    display_end_at: img.display_end_at,
-                    displayEnd_local: displayEnd.toLocaleString('ko-KR'),
-                    currentTime_local: currentTime.toLocaleString('ko-KR'),
-                    isVisible: isVisible
-                });
-                return isVisible;
+                return currentTime < displayEnd;
             }
             return false;
         }).sort((a, b) => {
@@ -623,8 +522,6 @@ App.loadTodayUploadedPhotos = async function() {
             const timeB = b.uploaded_at ? new Date(b.uploaded_at).getTime() : 0;
             return timeB - timeA;
         });
-        
-        console.log('필터링된 이미지 수:', windowImages.length);
         
         // 기존 목록 초기화
         photosList.innerHTML = '';

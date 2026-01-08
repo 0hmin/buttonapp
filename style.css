@@ -638,6 +638,7 @@ body {
 
 .view-buttons-container {
     margin-top: 20px;
+    padding-bottom: 10px;
     display: flex;
     justify-content: flex-start;
     width: 100%;

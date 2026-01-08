@@ -213,12 +213,7 @@ app.post('/api/login', async (req, res) => {
 
 // 이미지 업로드
 app.post('/api/images/upload', authenticateToken, upload.single('image'), async (req, res) => {
-  console.log('=== 이미지 업로드 요청 ===');
-  console.log('요청한 사용자 ID:', req.userId);
-  console.log('파일 존재:', !!req.file);
-  
   if (!req.file) {
-    console.error('파일이 없습니다.');
     return res.status(400).json({ error: '이미지 파일이 필요합니다.' });
   }
 
@@ -227,23 +222,6 @@ app.post('/api/images/upload', authenticateToken, upload.single('image'), async 
   const fileUrl = `/uploads/${filename}`;
   // 클라이언트에서 보낸 uploadedAt 사용, 없으면 서버 시간 사용
   const uploadedAt = clientUploadedAt || new Date().toISOString();
-  
-  console.log('이미지 업로드 - 시간 정보:', {
-    클라이언트에서_받은_uploadedAt: clientUploadedAt,
-    사용할_uploaded_at: uploadedAt,
-    display_start_at: displayStartAt,
-    display_end_at: displayEndAt
-  });
-
-  console.log('업로드 데이터:', {
-    user_id: req.userId,
-    filename: filename,
-    width: width,
-    height: height,
-    scale: scale,
-    displayStartAt: displayStartAt,
-    displayEndAt: displayEndAt
-  });
 
   try {
     const result = await pool.query(
@@ -253,20 +231,6 @@ app.post('/api/images/upload', authenticateToken, upload.single('image'), async 
     );
 
     const imageId = result.rows[0].id;
-
-    console.log('=== 이미지 저장 성공 ===');
-    console.log('저장된 이미지 ID:', imageId);
-    console.log('저장된 이미지 URL:', fileUrl);
-
-    // 저장 후 실제로 DB에 있는지 확인
-    const checkResult = await pool.query('SELECT * FROM images WHERE id = $1', [imageId]);
-    if (checkResult.rows[0]) {
-      console.log('DB에서 확인한 이미지:', {
-        id: checkResult.rows[0].id,
-        user_id: checkResult.rows[0].user_id,
-        src: checkResult.rows[0].src
-      });
-    }
 
     res.json({
       success: true,
@@ -289,22 +253,7 @@ app.post('/api/images/upload', authenticateToken, upload.single('image'), async 
 
 // 이미지 목록 조회
 app.get('/api/images', authenticateToken, async (req, res) => {
-  console.log('=== 이미지 목록 조회 요청 ===');
-  console.log('요청한 사용자 ID:', req.userId);
-  
   try {
-    // 먼저 JOIN 없이 이미지만 조회해서 확인
-    const countResult = await pool.query('SELECT COUNT(*) as count FROM images');
-    if (countResult.rows && countResult.rows.length > 0) {
-      console.log('images 테이블의 총 이미지 개수 (JOIN 없이):', countResult.rows[0].count);
-      
-      // 이미지가 있는데 JOIN으로 조회가 안 되는 경우를 대비해 실제 이미지 데이터도 확인
-      const sampleResult = await pool.query('SELECT id, user_id, src, uploaded_at FROM images LIMIT 5');
-      if (sampleResult.rows) {
-        console.log('샘플 이미지 데이터 (최대 5개):', sampleResult.rows);
-      }
-    }
-    
     // LEFT JOIN을 사용해서 users 테이블에 없는 경우에도 이미지는 조회되도록
     const query = `
       SELECT 
@@ -318,34 +267,9 @@ app.get('/api/images', authenticateToken, async (req, res) => {
     const result = await pool.query(query);
     const images = result.rows;
 
-    console.log('=== 데이터베이스 조회 결과 ===');
-    console.log('조회된 이미지 개수:', images ? images.length : 0);
-    if (images && images.length > 0) {
-      console.log('첫 번째 이미지:', {
-        id: images[0].id,
-        user_id: images[0].user_id,
-        src: images[0].src,
-        uploaded_at: images[0].uploaded_at,
-        user_nickname: images[0].user_nickname
-      });
-    } else {
-      console.log('조회된 이미지가 없습니다.');
-      // JOIN 없이 이미지만 조회해보기
-      const noJoinResult = await pool.query('SELECT * FROM images ORDER BY uploaded_at DESC LIMIT 10');
-      console.log('JOIN 없이 조회한 이미지 개수:', noJoinResult.rows ? noJoinResult.rows.length : 0);
-      if (noJoinResult.rows && noJoinResult.rows.length > 0) {
-        console.log('JOIN 없이 조회한 첫 번째 이미지:', {
-          id: noJoinResult.rows[0].id,
-          user_id: noJoinResult.rows[0].user_id,
-          src: noJoinResult.rows[0].src
-        });
-      }
-    }
-
     res.json({ images: images || [] });
   } catch (error) {
     console.error('이미지 조회 오류:', error);
-    console.error('에러 상세:', error.message);
     res.status(500).json({ error: '이미지 조회 실패: ' + error.message });
   }
 });

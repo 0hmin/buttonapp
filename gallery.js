@@ -2,14 +2,9 @@
 // 갤러리 화면 관련 모듈
 // ============================================
 
-console.log('gallery.js 로드 시작');
-
 // App 네임스페이스 사용 (이미 common.js에서 선언됨)
 if (typeof window.App === 'undefined') {
     window.App = {};
-    console.log('gallery.js: App 객체 생성');
-} else {
-    console.log('gallery.js: App 객체 이미 존재');
 }
 var App = window.App;
 
@@ -58,7 +53,6 @@ App.loadImageLayout = function(imageId) {
 App.recalculateDisplayWindows = async function() {
     // API 기반으로 변경되었으므로 서버에서 노출 시간을 관리
     // 클라이언트에서 재계산 불필요
-    console.log('노출 시간은 서버에서 관리됩니다.');
 };
 
 /**
@@ -1165,55 +1159,14 @@ App.checkOverlapWithOthers = function(currentWrapper, newWidth, newHeight, newX,
  * 노출 가능한 이미지만 필터링하여 보드에 표시
  */
 App.loadVisibleImages = async function() {
-    console.log('=== loadVisibleImages 함수 호출됨 ===');
-    console.log('loadVisibleImages 함수 정의 확인됨');
-    
     // API에서 이미지 목록 가져오기
     const allImages = await App.apiGetImages();
     const currentTime = App.getServerTime();
     
-    console.log('=== 이미지 로드 디버깅 ===');
-    console.log('전체 이미지 개수:', allImages.length);
-    console.log('현재 시간:', currentTime.toISOString());
-    console.log('현재 시간 (로컬):', currentTime.toLocaleString('ko-KR'));
-    
-    if (allImages.length > 0) {
-        console.log('저장된 이미지들:');
-        allImages.forEach((img, idx) => {
-            const displayStart = new Date(img.display_start_at);
-            const displayEnd = new Date(img.display_end_at);
-            const now = new Date(currentTime);
-            const isVisible = now >= displayStart && now < displayEnd;
-            
-            console.log(`이미지 ${idx + 1}:`, {
-                id: img.id,
-                uploaded_at: img.uploaded_at,
-                uploaded_at_local: new Date(img.uploaded_at).toLocaleString('ko-KR'),
-                display_start_at: img.display_start_at,
-                display_end_at: img.display_end_at,
-                display_start_local: displayStart.toLocaleString('ko-KR'),
-                display_end_local: displayEnd.toLocaleString('ko-KR'),
-                isVisible: isVisible,
-                now: now.toLocaleString('ko-KR')
-            });
-        });
-    }
-    
     const visibleImages = filterVisibleImages(allImages, currentTime);
-    console.log('노출 가능한 이미지 개수:', visibleImages.length);
-    console.log('노출 가능한 이미지 ID들:', visibleImages.map(img => img.id || 'no-id'));
     
     // 이미지 데이터 구조 확인
     if (visibleImages.length > 0) {
-        console.log('첫 번째 이미지 데이터 구조:', {
-            id: visibleImages[0].id,
-            hasSrc: !!visibleImages[0].src,
-            srcType: visibleImages[0].src ? (visibleImages[0].src.substring(0, 50) + '...') : '없음',
-            hasBgWidth: !!visibleImages[0].bgWidth,
-            bgWidth: visibleImages[0].bgWidth,
-            hasImgWidth: !!visibleImages[0].imgWidth,
-            imgWidth: visibleImages[0].imgWidth
-        });
     }
     
     // 보드에 표시
@@ -1228,7 +1181,6 @@ App.loadVisibleImages = async function() {
         }
         
         App.selectedPhotos = visibleImages;
-        console.log('selectedPhotos에 할당된 이미지 개수:', App.selectedPhotos.length);
         await App.placePhotos();
     } else {
         // 노출 가능한 이미지가 없을 때 사진없을때.png 표시
@@ -1260,38 +1212,29 @@ App.loadVisibleImages = async function() {
 App.placePhotos = async function() {
     const { photoPreview, mobileFrame } = App.elements;
     
-    console.log('=== placePhotos 함수 실행 (앵커 포인트 기반) ===');
-    console.log('photoPreview 요소:', photoPreview);
-    console.log('photoPreview 존재 여부:', !!photoPreview);
-    console.log('selectedPhotos 개수:', App.selectedPhotos.length);
-    
     if (!photoPreview) {
         console.error('photoPreview 요소를 찾을 수 없습니다!');
         return;
     }
     
     if (App.selectedPhotos.length === 0) {
-        console.error('selectedPhotos가 비어있습니다!');
         return;
     }
     
     // 기존 사진 제거
     photoPreview.innerHTML = '';
-    console.log('기존 사진 제거 완료');
     
     const frameWidth = mobileFrame ? mobileFrame.offsetWidth - 40 : window.innerWidth - 40;
     const containerHeight = window.innerHeight; // 세로 높이는 화면 높이로 고정 (세로 스크롤 없음)
     
     // 앵커 Row 정의 및 초기화
     App.anchorRows = App.defineAnchorRows(containerHeight);
-    console.log('생성된 row 개수:', App.anchorRows.length);
     
     // 컬럼 초기화
     App.anchorColumns = [];
     
     // 첫 번째 컬럼 생성 (x=50)
     App.createAnchorColumn(50, App.anchorRows);
-    console.log('첫 번째 컬럼 생성 완료');
     
     // 저장된 앵커 매핑 복원 (기존 사진들이 어떤 앵커에 배치되었는지)
     for (const photo of App.selectedPhotos) {
@@ -1316,18 +1259,9 @@ App.placePhotos = async function() {
     
     App.allWrappers = []; // wrapper 배열 초기화
     
-    console.log('배치할 이미지 개수:', App.selectedPhotos.length);
-    console.log('컨테이너 크기:', { width: frameWidth, height: containerHeight });
-    
     // 이미지들을 순서대로 배치
     for (let index = 0; index < App.selectedPhotos.length; index++) {
         const photo = App.selectedPhotos[index];
-        console.log(`이미지 ${index + 1} 배치 시작:`, {
-            id: photo.id,
-            src: photo.src ? '있음' : '없음',
-            imgWidth: photo.imgWidth,
-            imgHeight: photo.imgHeight
-        });
         
         // 저장된 레이아웃 정보 로드
         let layout = photo.layout || App.loadImageLayout(photo.id);
@@ -1336,7 +1270,6 @@ App.placePhotos = async function() {
         
         // 저장된 레이아웃이 있고 anchorId가 있으면 사용
         if (layout && layout.x !== undefined && layout.y !== undefined && layout.anchorId !== undefined) {
-            console.log(`이미지 ${index + 1}: 저장된 레이아웃 사용 (anchor ${layout.anchorId})`);
             // 저장된 앵커 찾기 (두 개의 앵커 ID가 있을 수 있음)
             const anchorIds = layout.anchorId.split(',');
             let savedAnchor = null;
@@ -1392,7 +1325,6 @@ App.placePhotos = async function() {
                 rotation = layout.rotation !== undefined ? layout.rotation : 0; // 저장된 회전 각도 사용
             } else {
                 // 저장된 앵커가 없거나 다른 사진이 있으면 새로 배치
-                console.log(`이미지 ${index + 1}: 저장된 앵커가 유효하지 않음, 새로 배치`);
                 
                 // 첫 번째 사진(index === 0)은 무조건 (1,1) 앵커에 배치
                 let anchorLayout = null;
@@ -1463,7 +1395,6 @@ App.placePhotos = async function() {
             }
         } else {
             // 저장된 레이아웃이 없으면 앵커 기반으로 새로 배치
-            console.log(`이미지 ${index + 1}: 앵커 기반 새로 배치`);
             
             // 첫 번째 사진(index === 0)은 무조건 (1,1) 앵커에 배치
             let anchorLayout = null;
@@ -1645,7 +1576,6 @@ App.placePhotos = async function() {
             }
             
             if (userHasButton) {
-                console.log('이미 단추를 달았습니다. 한 이미지당 하나의 단추만 가능합니다.');
                 return;
             }
             
@@ -1704,7 +1634,6 @@ App.placePhotos = async function() {
             // wrapper에 단추 추가
             if (wrapper) {
                 wrapper.appendChild(buttonImg);
-                console.log('단추를 wrapper에 추가함:', { wrapper, buttonImg });
             } else {
                 console.error('wrapper를 찾을 수 없습니다!');
             }
@@ -1736,9 +1665,7 @@ App.placePhotos = async function() {
                 // API를 통해 서버에 단추 저장
                 (async () => {
                     try {
-                        console.log('단추 저장 시도:', { imageId: photo.id, buttonData });
                         const result = await App.apiAddButton(photo.id, buttonData);
-                        console.log('서버에 단추 저장 완료:', result);
                         // 저장 성공 - 화면에 이미 표시된 단추는 그대로 유지
                     } catch (error) {
                         console.error('단추 저장 실패:', error);
@@ -1836,7 +1763,6 @@ App.placePhotos = async function() {
             (async () => {
                 try {
                     const buttons = await App.apiGetImageButtons(photo.id);
-                    console.log(`이미지 ${index + 1} (${photo.id})의 단추 개수:`, buttons.length);
                     
                     if (buttons && buttons.length > 0) {
                         buttons.forEach(buttonInfo => {
@@ -1862,13 +1788,6 @@ App.placePhotos = async function() {
                             
                             // wrapper에 단추 추가
                             wrapper.appendChild(existingButtonImg);
-                            console.log(`단추 추가됨: 이미지 ${index + 1} (${photo.id})`, {
-                                src: buttonData.src || buttonData.button_src,
-                                position: {
-                                    left: buttonData.left || buttonData.button_left,
-                                    top: buttonData.top || buttonData.button_top
-                                }
-                            });
                         });
                     }
                 } catch (error) {
@@ -1876,22 +1795,6 @@ App.placePhotos = async function() {
                 }
             })();
         }
-        
-        console.log(`이미지 ${index + 1} DOM 추가 완료:`, {
-            id: photo.id,
-            wrapper: wrapper,
-            position: { x: finalX, y: finalY },
-            size: { width: bgWidth, height: bgHeight },
-            src: photo.src ? '있음' : '없음',
-            photoPreviewChildren: photoPreview.children.length
-        });
-        
-        // 디버깅: 현재까지 배치된 이미지 확인
-        console.log(`이미지 ${index + 1} 배치 완료 (anchor ${anchorId}, row ${rowIndex}):`, {
-            position: { x: finalX, y: finalY },
-            size: { width: bgWidth, height: bgHeight },
-            imgSize: { width: imgWidth, height: imgHeight }
-        });
     }
     
     // preview 영역 크기 업데이트
@@ -1908,15 +1811,6 @@ App.placePhotos = async function() {
     const finalWidth = Math.max(frameWidth, maxAnchorRight + 50); // 오른쪽 여백 50px
     const fixedHeight = containerHeight; // 세로 고정 (화면 높이)
     
-    console.log('크기 계산:', {
-        frameWidth: frameWidth,
-        maxAnchorRight: maxAnchorRight,
-        finalWidth: finalWidth,
-        fixedHeight: fixedHeight,
-        totalRows: App.anchorRows.length,
-        totalAnchors: App.anchorRows.reduce((sum, row) => sum + row.anchors.length, 0)
-    });
-    
     photoPreview.style.width = finalWidth + 'px';
     photoPreview.style.height = containerHeight + 'px'; // 화면 높이로 고정
     photoPreview.style.minHeight = containerHeight + 'px';
@@ -1926,30 +1820,6 @@ App.placePhotos = async function() {
     
     // 앵커 포인트 시각적으로 표시
     App.renderAnchors(photoPreview);
-    
-    console.log('placePhotos 완료:', {
-        finalWidth: finalWidth,
-        containerHeight: containerHeight,
-        totalPhotos: App.allWrappers.length,
-        photoPreviewChildren: photoPreview.children.length,
-        photoPreviewStyle: {
-            width: photoPreview.style.width,
-            height: photoPreview.style.height,
-            overflowX: photoPreview.style.overflowX,
-            overflowY: photoPreview.style.overflowY
-        }
-    });
-    
-    console.log('모든 이미지 배치 완료. DOM 요소 개수:', photoPreview ? photoPreview.children.length : 0);
-    console.log('photoPreview 크기 (설정 후):', {
-        width: photoPreview ? photoPreview.style.width : 'N/A',
-        height: photoPreview ? photoPreview.style.height : 'N/A',
-        maxHeight: photoPreview ? photoPreview.style.maxHeight : 'N/A',
-        computedWidth: photoPreview ? window.getComputedStyle(photoPreview).width : 'N/A',
-        computedHeight: photoPreview ? window.getComputedStyle(photoPreview).height : 'N/A',
-        offsetWidth: photoPreview ? photoPreview.offsetWidth : 'N/A',
-        offsetHeight: photoPreview ? photoPreview.offsetHeight : 'N/A'
-    });
 };
 
 /**

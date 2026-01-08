@@ -130,24 +130,9 @@ App.apiUploadImage = async function(dataURL, imageData) {
 // 이미지 목록 조회
 App.apiGetImages = async function() {
     try {
-        console.log('=== apiGetImages 호출 시작 ===');
-        const token = localStorage.getItem('auth_token');
-        console.log('인증 토큰 존재:', !!token);
-        
         const result = await App.apiRequest('/api/images', {
             method: 'GET'
         });
-        
-        console.log('=== API 응답 받음 ===');
-        console.log('응답 타입:', typeof result);
-        console.log('응답 전체:', result);
-        console.log('result.images 존재:', !!result.images);
-        console.log('result.images 타입:', Array.isArray(result.images) ? '배열' : typeof result.images);
-        console.log('result.images 길이:', result.images ? result.images.length : 0);
-        
-        if (result.images && result.images.length > 0) {
-            console.log('첫 번째 이미지 데이터:', result.images[0]);
-        }
         
         // 서버 응답을 클라이언트 형식으로 변환
         const images = (result.images || []).map(img => ({
@@ -170,12 +155,9 @@ App.apiGetImages = async function() {
             padding: ((img.width || 100) * 1.1 - (img.width || 100)) / 2
         }));
         
-        console.log('=== 변환된 이미지 개수 ===', images.length);
         return images;
     } catch (error) {
-        console.error('=== apiGetImages 에러 ===');
-        console.error('에러 메시지:', error.message);
-        console.error('에러 전체:', error);
+        console.error('이미지 조회 오류:', error);
         throw error;
     }
 };

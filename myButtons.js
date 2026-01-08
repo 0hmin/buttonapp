@@ -36,10 +36,6 @@ App.loadMyButtonImages = async function() {
     try {
         // API를 통해 현재 사용자의 단추 정보 조회
         const userButtons = await App.apiGetUserButtons();
-        console.log('=== 단추보기 페이지 로드 ===');
-        console.log('사용자 단추 개수:', userButtons.length);
-        console.log('현재 사용자:', currentUser);
-        console.log('사용자 단추 데이터:', userButtons);
 
         if (userButtons.length === 0) {
             // 단추없음.png 이미지를 오전안내.png와 같은 위치에 표시
