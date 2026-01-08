@@ -39,7 +39,7 @@ body {
     max-width: 375px;
     min-height: 100vh;
     background-image: url('화면배경.png');
-    background-size: cover;
+    background-size: contain; /* 확대되지 않고 딱 맞게 */
     background-position: center;
     background-repeat: no-repeat;
     position: relative;
@@ -68,6 +68,19 @@ body {
     background-size: auto;
     background-position: top left;
     background-repeat: repeat;
+}
+
+/* 사진 보는 페이지에서 사진이 없을 때 표시할 이미지 스타일 (단추없음.png와 같은 위치) */
+.gallery-empty-image {
+    position: absolute;
+    top: calc(20px + 39px + 20px); /* 홈 버튼 높이(39px) + 20px 간격, 단추없음.png와 동일한 위치 */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 90%;
+    height: auto;
+    z-index: 100;
+    pointer-events: none;
 }
 
 .screen.active {
@@ -269,7 +282,7 @@ body {
     border: 1px solid #FFF;
     background: #FFF;
     padding: 0 10px;
-    font-size: 12px;
+    font-size: 16px; /* 모바일에서 자동 확대 방지 (16px 이상) */
     font-family: Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-weight: 300;
     text-align: left; /* 왼쪽 정렬 */
@@ -297,7 +310,7 @@ body {
     border: 1px solid #FFF;
     background: #FFF;
     padding: 0 10px;
-    font-size: 12px;
+    font-size: 16px; /* 모바일에서 자동 확대 방지 (16px 이상) */
     font-family: Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-weight: 300;
     text-align: left; /* 왼쪽 정렬 */
@@ -395,6 +408,12 @@ body {
     position: relative;
     overflow: hidden;
     overflow-y: hidden;
+    background-image: url('화면배경.png');
+    background-size: contain; /* 확대되지 않고 화면에 딱 맞게 */
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    min-height: 100vh;
 }
 
 #photo-upload-screen {

@@ -393,49 +393,20 @@ App.resetTimeOffset = function() {
 };
 
 /**
- * 서버 시간 가져오기 (실제로는 API에서 가져와야 함)
- * 개발 모드에서는 오프셋 적용
+ * 서버 시간 가져오기 (배포용: 실제 서버 시간 사용)
  */
 App.getServerTime = function() {
     // 실제로는: return fetch('/api/time').then(r => r.json()).then(d => new Date(d.time));
-    const realTime = new Date();
-    const offset = App.getTimeOffset();
-    return new Date(realTime.getTime() + offset);
+    // 배포용: 현재 클라이언트 시간 사용 (오프셋 없음)
+    return new Date();
 };
 
 /**
- * 시간 표시 업데이트
+ * 시간 표시 업데이트 (배포용: 제거됨 - 개발자 모드 시간 조절 기능 없음)
  */
 App.updateTimeDisplay = function() {
-    const currentTime = App.getServerTime();
-    const offset = App.getTimeOffset();
-    
-    const currentTimeDisplay = document.getElementById('current-time-display');
-    const timeOffsetDisplay = document.getElementById('time-offset-display');
-    
-    if (currentTimeDisplay) {
-        currentTimeDisplay.textContent = currentTime.toLocaleString('ko-KR', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        });
-    }
-    
-    if (timeOffsetDisplay) {
-        if (offset === 0) {
-            timeOffsetDisplay.textContent = '없음';
-            timeOffsetDisplay.style.color = '#666';
-        } else {
-            const hours = Math.floor(Math.abs(offset) / (1000 * 60 * 60));
-            const minutes = Math.floor((Math.abs(offset) % (1000 * 60 * 60)) / (1000 * 60));
-            const sign = offset > 0 ? '+' : '-';
-            timeOffsetDisplay.textContent = `${sign}${hours}시간 ${minutes}분`;
-            timeOffsetDisplay.style.color = '#f44336';
-        }
-    }
+    // 배포용: 시간 조절 기능 제거됨
+    // 이 함수는 호출되지만 아무 작업도 하지 않음
 };
 
 /**

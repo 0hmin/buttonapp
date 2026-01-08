@@ -1218,14 +1218,38 @@ App.loadVisibleImages = async function() {
     
     // 보드에 표시
     const { photoPreview } = App.elements;
+    const galleryScreen = document.getElementById('gallery-screen');
+    
     if (visibleImages.length > 0) {
+        // 기존에 표시된 빈 이미지 제거
+        const existingEmptyImage = galleryScreen ? galleryScreen.querySelector('.gallery-empty-image') : null;
+        if (existingEmptyImage) {
+            existingEmptyImage.remove();
+        }
+        
         App.selectedPhotos = visibleImages;
         console.log('selectedPhotos에 할당된 이미지 개수:', App.selectedPhotos.length);
         await App.placePhotos();
     } else {
-        // 노출 가능한 이미지가 없을 때 텍스트 표시하지 않음 (빈 화면)
+        // 노출 가능한 이미지가 없을 때 사진없을때.png 표시
         if (photoPreview) {
             photoPreview.innerHTML = '';
+        }
+        
+        // 사진없을때.png 이미지를 단추없음.png와 같은 위치에 표시
+        if (galleryScreen) {
+            // 기존 빈 이미지 제거
+            const existingEmptyImage = galleryScreen.querySelector('.gallery-empty-image');
+            if (existingEmptyImage) {
+                existingEmptyImage.remove();
+            }
+            
+            // 새로 생성
+            const emptyImage = document.createElement('img');
+            emptyImage.src = '사진없을때.png';
+            emptyImage.alt = '사진 없음';
+            emptyImage.className = 'gallery-empty-image';
+            galleryScreen.appendChild(emptyImage);
         }
     }
 };

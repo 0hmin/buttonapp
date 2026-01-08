@@ -109,49 +109,6 @@
                         <img src="단추보기.png" alt="단추 보기" class="view-buttons-image">
                     </button>
                 </div>
-                <!-- 개발 모드: 시간 조작 패널 -->
-                <div id="time-control-panel" class="time-control-panel" style="display: none;">
-                    <div class="time-control-header">
-                        <span>🕐 시간 조작 (개발 모드)</span>
-                        <button id="toggle-time-panel" class="toggle-time-btn">접기</button>
-                    </div>
-                    <div class="time-control-content">
-                        <div class="time-control-info">
-                            <div>현재 시간: <span id="current-time-display"></span></div>
-                            <div>오프셋: <span id="time-offset-display"></span></div>
-                        </div>
-                        <div class="time-control-buttons">
-                            <button class="time-btn" data-offset="-3600000">-1시간</button>
-                            <button class="time-btn" data-offset="-1800000">-30분</button>
-                            <button class="time-btn" data-offset="-600000">-10분</button>
-                            <button class="time-btn" data-offset="600000">+10분</button>
-                            <button class="time-btn" data-offset="1800000">+30분</button>
-                            <button class="time-btn" data-offset="3600000">+1시간</button>
-                        </div>
-                        <div class="time-control-preset">
-                            <div class="preset-label">프리셋:</div>
-                            <div class="preset-group">
-                                <div class="preset-group-title">업로드 가능 시간:</div>
-                                <button class="preset-btn" data-hour="0" data-minute="0">00:00 (업로드 가능)</button>
-                                <button class="preset-btn" data-hour="5" data-minute="0">05:00 (업로드 가능)</button>
-                            </div>
-                            <div class="preset-group">
-                                <div class="preset-group-title">노출 시간:</div>
-                                <button class="preset-btn" data-hour="6" data-minute="0">06:00 (노출 시작)</button>
-                                <button class="preset-btn" data-hour="9" data-minute="0">09:00 (노출 중)</button>
-                                <button class="preset-btn" data-hour="11" data-minute="0">11:00 (노출 중)</button>
-                            </div>
-                            <div class="preset-group">
-                                <div class="preset-group-title">노출 종료 후:</div>
-                                <button class="preset-btn" data-hour="12" data-minute="0">12:00 (노출 종료)</button>
-                                <button class="preset-btn" data-hour="13" data-minute="0">13:00 (업로드 가능)</button>
-                            </div>
-                        </div>
-                        <div class="time-control-reset">
-                            <button id="reset-time-btn" class="reset-time-btn">시간 초기화</button>
-                        </div>
-                    </div>
-                </div>
             </div>
             
             <!-- 사진 업로드 페이지 -->

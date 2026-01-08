@@ -85,25 +85,6 @@ App.closePopup = function() {
 };
 
 /**
- * 시간 조작 패널 표시/숨김
- */
-App.toggleTimePanelVisibility = function() {
-    const timeControlPanel = document.getElementById('time-control-panel');
-    const toggleTimePanel = document.getElementById('toggle-time-panel');
-    
-    if (timeControlPanel) {
-        const isVisible = timeControlPanel.style.display !== 'none';
-        timeControlPanel.style.display = isVisible ? 'none' : 'block';
-        if (toggleTimePanel) {
-            toggleTimePanel.textContent = isVisible ? '펼치기' : '접기';
-        }
-        try {
-            localStorage.setItem(App.TIME_PANEL_VISIBLE_KEY, (!isVisible).toString());
-        } catch (e) {}
-    }
-};
-
-/**
  * 업로드 화면 초기화
  */
 App.initUpload = function() {
@@ -111,73 +92,8 @@ App.initUpload = function() {
     
     if (!photoUpload) return;
     
-    // 시간 조작 UI 초기화
-    const timeControlPanel = document.getElementById('time-control-panel');
-    const toggleTimePanel = document.getElementById('toggle-time-panel');
-    const resetTimeBtn = document.getElementById('reset-time-btn');
-    
-    // 시간 조작 버튼 이벤트 설정
-    if (timeControlPanel) {
-        // 오프셋 버튼들
-        const timeButtons = timeControlPanel.querySelectorAll('.time-btn');
-        timeButtons.forEach(btn => {
-            btn.addEventListener('click', function() {
-                const offset = parseInt(this.dataset.offset, 10);
-                const currentOffset = App.getTimeOffset();
-                App.setTimeOffset(currentOffset + offset);
-            });
-        });
-        
-        // 프리셋 버튼들
-        const presetButtons = timeControlPanel.querySelectorAll('.preset-btn');
-        presetButtons.forEach(btn => {
-            btn.addEventListener('click', function() {
-                const hour = parseInt(this.dataset.hour, 10);
-                const minute = parseInt(this.dataset.minute, 10);
-                
-                const now = new Date();
-                const targetTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, minute, 0, 0);
-                
-                // 오늘 해당 시간이 지났으면 내일로 설정
-                if (targetTime < now) {
-                    targetTime.setDate(targetTime.getDate() + 1);
-                }
-                
-                const offset = targetTime.getTime() - now.getTime();
-                App.setTimeOffset(offset);
-            });
-        });
-        
-        // 초기화 버튼
-        if (resetTimeBtn) {
-            resetTimeBtn.addEventListener('click', App.resetTimeOffset);
-        }
-        
-        // 토글 버튼
-        if (toggleTimePanel) {
-            toggleTimePanel.addEventListener('click', App.toggleTimePanelVisibility);
-        }
-        
-        // 패널 표시 상태 복원
-        try {
-            const wasVisible = localStorage.getItem(App.TIME_PANEL_VISIBLE_KEY) === 'true';
-            if (wasVisible) {
-                timeControlPanel.style.display = 'block';
-                if (toggleTimePanel) {
-                    toggleTimePanel.textContent = '접기';
-                }
-            }
-        } catch (e) {}
-        
-        // 개발 모드: 시간 조작 패널 기본 표시
-        if (timeControlPanel.style.display === 'none') {
-            timeControlPanel.style.display = 'block';
-        }
-    }
-    
     // 초기 업로드 상태 확인
     App.updateUploadStatus();
-    App.updateTimeDisplay();
     App.updateViewBoardButton();
     
     // 안내 이미지 업데이트 및 주기적 업데이트
@@ -193,10 +109,12 @@ App.initUpload = function() {
     App.setupAddPhotoButton();
     App.setupBackFromUploadButton();
     
-    // 1분마다 업로드 상태 및 시간 표시 업데이트
+    // 메인 화면의 사진 올리기 버튼 설정 (upload-screen에서)
+    App.setupGoToPhotoUploadButton();
+    
+    // 1분마다 업로드 상태 업데이트
     setInterval(() => {
         App.updateUploadStatus();
-        App.updateTimeDisplay();
         App.updateViewBoardButton();
     }, 60000);
     
@@ -812,12 +730,30 @@ App.setupBackFromUploadButton = function() {
 App.setupGoToPhotoUploadButton = function() {
     const goToPhotoUploadBtn = document.getElementById('go-to-photo-upload-btn');
     
-    if (!goToPhotoUploadBtn) return;
+    if (!goToPhotoUploadBtn) {
+        console.warn('go-to-photo-upload-btn 버튼을 찾을 수 없습니다.');
+        return;
+    }
     
-    goToPhotoUploadBtn.addEventListener('click', function() {
+    // 기존 이벤트 리스너 제거 후 새로 추가 (중복 방지)
+    const newBtn = goToPhotoUploadBtn.cloneNode(true);
+    goToPhotoUploadBtn.parentNode.replaceChild(newBtn, goToPhotoUploadBtn);
+    const freshBtn = document.getElementById('go-to-photo-upload-btn');
+    
+    if (!freshBtn) {
+        console.error('버튼 복제 후 찾을 수 없습니다.');
+        return;
+    }
+    
+    freshBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('사진 올리기 버튼 클릭됨');
         // 사진 업로드 페이지로 이동
         App.showScreen('photo-upload');
     });
+    
+    console.log('사진 올리기 버튼 이벤트 리스너 설정 완료');
 };
 
 /**
